@@ -4,6 +4,7 @@ import java.net.Socket;
 import java.io.*;
 import com.example.http.HTTPRequest;
 import com.example.http.HTTPResponse;
+import com.example.routing.*;
 
 public class ConnectionHandler {
 
@@ -22,9 +23,8 @@ public class ConnectionHandler {
             if (req == null)
                 return;
             System.out.println("Received: " + req.method + " " + req.path + " " + req.headers.toString());
-
-            HTTPResponse res = new HTTPResponse();
-            res.setBody("welcome to hell");
+            Router router = new Router(); 
+            HTTPResponse res =router.route(req);
             
             out.write(res.toBytes());
             out.flush();
