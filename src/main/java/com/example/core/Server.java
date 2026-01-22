@@ -21,7 +21,7 @@ public class Server {
             
             while(true){                
                 Socket client = serverSocket.accept();
-                client.close();
+                new ConnectionHandler(client).handle();
             }
         } catch(IOException ex){
             System.err.println("error:"+ ex.getMessage());
