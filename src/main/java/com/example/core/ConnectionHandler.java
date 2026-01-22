@@ -22,7 +22,7 @@ public class ConnectionHandler {
             HTTPRequest req = HTTPRequest.parse(reader);
             if (req == null)
                 return;
-            System.out.println("Received: " + req.method + " " + req.path + " " + req.headers.toString());
+            System.out.println("Received: " + req.method + " " + req.path);
             Router router = new Router(); 
             HTTPResponse res =router.route(req);
             

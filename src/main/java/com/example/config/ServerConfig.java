@@ -1,7 +1,10 @@
 package com.example.config;
 
+import java.util.List;
+
 public class ServerConfig {
-    public int port = 8080;
-    public String host = "0.0.0.0";
-    public String root = "www";
+    public String host;
+    public List<Integer> ports;
+    public boolean isDefault;
+    public String root;
 }

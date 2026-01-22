@@ -4,20 +4,18 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-import com.example.config.ServerConfig;
-
 public class Server {
 
-    private final ServerConfig config;
+    private final int port;
 
-    public Server(ServerConfig config){
-        this.config = config;
+    public Server(int port){
+        this.port = port;
     }
     
 
     public void start(){
-        try (ServerSocket serverSocket = new ServerSocket(config.port)){
-            System.out.println("listening on : "+ config.port);
+        try (ServerSocket serverSocket = new ServerSocket(port)){
+            System.out.println("listening on : "+ port);
             
             while(true){                
                 Socket client = serverSocket.accept();
