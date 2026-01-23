@@ -18,12 +18,8 @@ public class Main {
                 .findFirst()
                 .orElseThrow();
 
-        int[] ports = active.ports.stream()
-                .mapToInt(Integer::intValue)
-                .toArray();
-
         try {
-            new Server(ports).start();
+            new Server(active).start();
         } catch (IOException doNoting) {}
     }
 
