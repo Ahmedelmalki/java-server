@@ -8,7 +8,6 @@ public class Router {
     private final StaticFileHandler staticFileHandler = new StaticFileHandler();
     private final ErrorHandler errorHandler = new ErrorHandler();
 
-    //TODO:
     public HTTPResponse route(HTTPRequest req){
         if(req.method.equals("GET")){
             return staticFileHandler.handle(req);

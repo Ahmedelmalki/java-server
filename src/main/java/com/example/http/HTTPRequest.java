@@ -1,7 +1,5 @@
 package com.example.http;
 
-import java.io.BufferedReader;
-import java.io.IOException;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -11,22 +9,25 @@ public class HTTPRequest {
     public String version;
     public Map<String, String> headers = new HashMap<>();
 
-    public static HTTPRequest parse(BufferedReader br) throws IOException{
+    public static HTTPRequest parse(String rawRequest) {
         HTTPRequest req = new HTTPRequest();
-        String requestLine = br.readLine();
-        if (requestLine == null || requestLine.isEmpty()) return null;
+        String[] lines = rawRequest.split("\r\n");
+        if (lines.length == 0)
+            return null;
 
-        String[] parts = requestLine.split(" ");
+        String[] parts = lines[0].split(" ");
         req.method = parts[0];
         req.path = parts[1];
         req.version = parts[2];
 
-        String line;
-        while((line = br.readLine()) != null && !line.isEmpty()){
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i];
+            if (line.isEmpty())
+                break;
             int idx = line.indexOf(":");
-            if(idx > 0){
+            if (idx > 0) {
                 String k = line.substring(0, idx);
-                String v = line.substring(idx+1).trim();
+                String v = line.substring(idx + 1).trim();
                 req.headers.put(k, v);
             }
         }

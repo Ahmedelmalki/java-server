@@ -16,13 +16,16 @@ public class HTTPResponse {
         this.statusMessage = message;
     }
 
-    public void setHeader(String k, String v) {
+    public void addHeader(String k, String v) {
         headers.put(k, v);
     }
 
     public void setBody(String body) {
         this.body = body;
-        setHeader("Content-Length", String.valueOf(body.length()));
+    }
+
+    public String getBody(){
+        return this.body;
     }
 
     public byte[] toBytes() {

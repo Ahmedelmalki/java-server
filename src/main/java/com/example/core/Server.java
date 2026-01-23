@@ -4,12 +4,11 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Set;
-
 import com.example.config.ServerConfig;
+import com.example.http.HTTPRequest;
+import com.example.http.HTTPResponse;
 
 public class Server {
 
@@ -27,7 +26,7 @@ public class Server {
          * single thread
          */
         Selector selector = Selector.open();
-        // ServerConfig serverConfig = new ServerConfig(/* whatever */);    
+        // ServerConfig serverConfig = new ServerConfig(/* whatever */);
 
         for (int port : config.ports) {
             ServerSocketChannel server = ServerSocketChannel.open();
@@ -73,37 +72,36 @@ public class Server {
 
     public void read(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
-        // ByteBuffer buffer = (ByteBuffer) key.attachment();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
-        ByteBuffer buffer = ctx.readBuffer;
 
-        int bytesRead = client.read(buffer);
+        int bytesRead = client.read(ctx.readBuffer);
 
-        if (bytesRead == -1) { // end-of-stream
+        if (bytesRead == -1) {
             client.close();
             return;
         }
-        /*
-         * This effectively "flips" the buffer from write mode
-         * (where data is being filled) to read mode
-         * (where data is being extracted)
-         */
-        buffer.flip();
-        byte[] data = new byte[buffer.remaining()];
-        buffer.get(data);
-        buffer.clear();
 
-        String request = new String(data);
-        System.out.println("Request:\n" + request);
+        ctx.readBuffer.flip();
+        byte[] data = new byte[ctx.readBuffer.remaining()];
+        ctx.readBuffer.get(data);
+        ctx.readBuffer.clear();
 
-        String response = "HTTP/1.1 200 OK\r\n" +
-                "Content-Length: 5\r\n" +
-                "Connection: close\r\n" +
-                "\r\n" +
-                "Hello";
+        String raw = new String(data);
+        if (!raw.contains("\r\n\r\n"))
+            return;
 
-        client.write(ByteBuffer.wrap(response.getBytes()));
+        ctx.request = HTTPRequest.parse(raw);
+        ctx.headresComplete = true;
+
+        HTTPResponse res = new HTTPResponse();
+        res.setStatus(200, "OK");
+        res.setBody("Hello, hell!");
+        res.addHeader("Content-Type", "text/plain");
+        res.addHeader("Content-Length", String.valueOf(res.getBody().length()));
+
+        client.write(ByteBuffer.wrap(res.toBytes()));
         client.close();
+
     }
 
 }
