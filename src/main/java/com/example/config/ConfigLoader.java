@@ -24,7 +24,7 @@ public class ConfigLoader {
 
                 cfg.ports = new ArrayList<>();
                 for (Object p : s.getJSONArray("ports")) {
-                    cfg.ports.add((Integer) p);
+                    cfg.ports.add(((Number) p).intValue());
                 }
                 servers.add(cfg);
             }

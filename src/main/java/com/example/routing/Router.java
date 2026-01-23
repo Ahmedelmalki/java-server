@@ -13,6 +13,7 @@ public class Router {
         if(req.method.equals("GET")){
             return staticFileHandler.handle(req);
         } else{
+            System.out.println("method not allowed bitch");
             return errorHandler.handle405(req);
         }
     }

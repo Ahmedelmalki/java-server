@@ -30,10 +30,12 @@ public class HTTPResponse {
         sb.append(version).append(" ")
                 .append(statusCode).append(" ")
                 .append(statusMessage).append("\r\n");
+
         for(Map.Entry<String, String> entry: headers.entrySet()){
             sb.append(entry.getKey()).append(": ")
             .append(entry.getValue()).append("\r\n");
         }
+        
         sb.append("\r\n");
         sb.append(body);
         return sb.toString().getBytes();

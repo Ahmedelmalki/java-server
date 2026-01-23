@@ -15,17 +15,19 @@ public class ConnectionHandler {
     }
 
     public void handle() {
-        try (InputStream in = socket.getInputStream();
+        try (
+                InputStream in = socket.getInputStream();
                 OutputStream out = socket.getOutputStream();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(in));) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+            ) {
 
             HTTPRequest req = HTTPRequest.parse(reader);
             if (req == null)
                 return;
             System.out.println("Received: " + req.method + " " + req.path);
-            Router router = new Router(); 
-            HTTPResponse res =router.route(req);
-            
+            Router router = new Router();
+            HTTPResponse res = router.route(req);
+
             out.write(res.toBytes());
             out.flush();
 
