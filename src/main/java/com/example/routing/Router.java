@@ -10,9 +10,9 @@ public class Router {
     private final UploadHandler uploadHandler = new UploadHandler();
     private final CGIHandler cgiHandler = new CGIHandler();
 
-    public HTTPResponse route(HTTPRequest req){
+    public HTTPResponse route(HTTPRequest req, String root){
         if(req.method.equals("GET")){
-            return staticFileHandler.handle(req);
+            return staticFileHandler.handle(req, root); // where should i get the root form
         } else{
             return errorHandler.handle405(req);
         }

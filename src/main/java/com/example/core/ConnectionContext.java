@@ -14,4 +14,5 @@ public class ConnectionContext {
     public ConnState state = ConnState.READING_HEADERS;
 
     public ServerConfig serverConfig;
+    public String matchedRoot;
 }

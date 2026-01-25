@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 public class ConfigLoader {
@@ -20,11 +21,47 @@ public class ConfigLoader {
 
                 cfg.host = s.getString("host");
                 cfg.isDefault = s.getBoolean("isDefault");
-                // cfg.root = s.getString("root");
 
                 cfg.ports = new ArrayList<>();
                 for (Object p : s.getJSONArray("ports")) {
                     cfg.ports.add(((Number) p).intValue());
+                }
+
+                cfg.routes = new ArrayList<>();
+                JSONArray routesArray = s.getJSONArray("routes");
+                for (int j = 0; j < routesArray.length(); j++) {
+                    JSONObject r = routesArray.getJSONObject(j);
+                    RouteConfig route = new RouteConfig();
+                    route.path = r.getString("path");
+                    route.methods = new ArrayList<>();
+                    if (r.has("methods")) {
+                        JSONArray methodArray = r.getJSONArray("methods");
+                        for (int k = 0; k < methodArray.length(); k++) {
+                            route.methods.add(methodArray.getString(k));
+                        }
+                    }
+
+                    route.root = r.optString("root", null);
+                    route.index = r.optString("index", null);
+                    route.autoindex = r.optBoolean("autoindex", false);
+                    route.uploadEnabled = r.optBoolean("uploadEnabled", false);
+
+                    if (r.has("cgi")) {
+                        route.cgi = new HashMap<>();
+                        JSONObject cjiObj = r.getJSONObject("cgi");
+                        for (String key : cjiObj.keySet()) {
+                            route.cgi.put(key, cjiObj.getString(key));
+                        }
+                    }
+
+                    if (r.has("redirect")) {
+                        JSONObject rdObj = r.getJSONObject("redirect");
+                        route.redirect = new RedirectConfig();
+                        route.redirect.code = rdObj.getInt("code");
+                        route.redirect.url = rdObj.getString("url");
+                    }
+
+                    cfg.routes.add(route);
                 }
                 servers.add(cfg);
             }

@@ -10,6 +10,7 @@ public class HTTPResponse {
     private String statusMessage = "OK";
     private Map<String, String> headers = new HashMap<>();
     private String body = "";
+    private byte[] bodyBytes = new byte[]{};
 
     public void setStatus(int code, String message) {
         this.statusCode = code;
@@ -22,6 +23,10 @@ public class HTTPResponse {
 
     public void setBody(String body) {
         this.body = body;
+    }
+
+    public void setBodyBytes(byte[] data){
+        this.bodyBytes = data;
     }
 
     public String getBody(){

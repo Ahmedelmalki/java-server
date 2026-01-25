@@ -6,6 +6,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.Iterator;
 import java.util.Set;
+
+import com.example.config.RouteConfig;
 import com.example.config.ServerConfig;
 import com.example.http.HTTPRequest;
 import com.example.http.HTTPResponse;
@@ -93,6 +95,13 @@ public class Server {
                 return;
             }
             ctx.request = HTTPRequest.parse(ctx.raw.toString());
+            for (RouteConfig route : ctx.serverConfig.routes) {
+                if (ctx.request.path.startsWith(route.path)) {
+                    ctx.matchedRoot = route.root;
+                    break;
+                }
+            }
+
             ctx.state = ConnState.PROCESSING;
         }
 
