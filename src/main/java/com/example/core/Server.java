@@ -19,14 +19,7 @@ public class Server {
     }
 
     public void start() throws IOException {
-        /*
-         * Selector in Java NIO is an abstraction that multiplexes SelectableChannel
-         * objects,
-         * enabling efficient, non-blocking I/O operations on multiple channels using a
-         * single thread
-         */
         Selector selector = Selector.open();
-        // ServerConfig serverConfig = new ServerConfig(/* whatever */);
 
         for (int port : config.ports) {
             ServerSocketChannel server = ServerSocketChannel.open();
@@ -50,6 +43,8 @@ public class Server {
                     accept(selector, key);
                 } else if (key.isReadable()) {
                     read(key);
+                } else if (key.isWritable()) {
+                    write(key);
                 }
             }
         }
@@ -81,27 +76,49 @@ public class Server {
             return;
         }
 
-        ctx.readBuffer.flip();
+        ctx.readBuffer.flip(); // switch buffer to read mode
+
         byte[] data = new byte[ctx.readBuffer.remaining()];
         ctx.readBuffer.get(data);
+        System.out.println("data :\n" + data.toString());
         ctx.readBuffer.clear();
 
-        String raw = new String(data);
-        if (!raw.contains("\r\n\r\n"))
-            return;
+        String chunk = new String(data);
+        ctx.raw.append(chunk);
 
-        ctx.request = HTTPRequest.parse(raw);
-        ctx.headresComplete = true;
+        // ----- HEADER DETECTION -----
+        if (ctx.state == ConnState.READING_HEADERS) {
+            if (!ctx.raw.toString().contains("\r\n\r\n")) {
+                // headers not complete yet
+                return;
+            }
+            ctx.request = HTTPRequest.parse(ctx.raw.toString());
+            ctx.state = ConnState.PROCESSING;
+        }
 
-        HTTPResponse res = new HTTPResponse();
-        res.setStatus(200, "OK");
-        res.setBody("Hello, hell!");
-        res.addHeader("Content-Type", "text/plain");
-        res.addHeader("Content-Length", String.valueOf(res.getBody().length()));
+        // ----- PROCESS REQUEST -----
+        if (ctx.state == ConnState.PROCESSING) {
+            HTTPResponse res = new HTTPResponse();
+            res.setStatus(200, "OK");
+            res.setBody("Hello, hell!");
+            res.addHeader("Content-Type", "text/plain");
+            res.addHeader("Content-Length", String.valueOf(res.getBody().length()));
 
-        client.write(ByteBuffer.wrap(res.toBytes()));
-        client.close();
+            ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
+            ctx.state = ConnState.WRITING_RESPONSE;
 
+            key.interestOps(SelectionKey.OP_WRITE);
+        }
     }
 
+    public void write(SelectionKey key) throws IOException {
+        SocketChannel client = (SocketChannel) key.channel();
+        ConnectionContext ctx = (ConnectionContext) key.attachment();
+
+        client.write(ctx.writeBuffer);
+        if (!ctx.writeBuffer.hasRemaining()) {
+            ctx.state = ConnState.CLOSED;
+            client.close();
+        }
+    }
 }

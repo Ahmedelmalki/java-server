@@ -36,7 +36,8 @@ public class ErrorHandler {
                 res.setBody("Internal Server Error");
             }
         } else {
-
+            res.setStatus(Integer.parseInt(filename.split("\\.")[0]), defaultMessage);
+            res.setBody(defaultMessage);
         }
         return res;
     }
