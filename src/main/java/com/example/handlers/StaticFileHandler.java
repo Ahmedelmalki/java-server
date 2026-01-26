@@ -1,5 +1,6 @@
 package com.example.handlers;
 
+import com.example.config.RouteConfig;
 import com.example.http.HTTPRequest;
 import com.example.http.HTTPResponse;
 
@@ -9,15 +10,19 @@ import java.nio.file.Path;
 
 public class StaticFileHandler {
 
-    public HTTPResponse handle(HTTPRequest req, String rootDir) {
+    public HTTPResponse handle(HTTPRequest req, RouteConfig route) {
         HTTPResponse res = new HTTPResponse();
 
         try {
-            // Default file
-            String relPath = req.path.equals("/") ? "/index.html" : req.path;
+            String relPath = req.path.substring(route.path.length());
+            if (relPath.isEmpty() || relPath.equals("/")) {
+                relPath = "/" + (route.index != null ? route.index : "index.html");
+            }
 
-            Path root = Path.of(rootDir).toAbsolutePath().normalize();
-            Path file = root.resolve(relPath.substring(1)).normalize();
+            Path root = Path.of(route.root).toAbsolutePath().normalize();
+            Path file = root.resolve(relPath.startsWith("/") ? relPath.substring(1) : relPath).normalize();
+            
+            System.out.println("==========\n real path: " + relPath + "\nfile: " + file.toString());
 
             // Directory traversal protection
             if (!file.startsWith(root)) {
@@ -33,11 +38,16 @@ public class StaticFileHandler {
             }
 
             if (Files.isDirectory(file)) {
-                // try index.html inside dir
-                Path index = file.resolve("index.html");
-                if (Files.exists(index)) {
-                    file = index;
-                } else {
+                if (route.index != null) {
+                    Path index = file.resolve(route.index);
+                    if (Files.exists(index)) {
+                        file = index;
+                    } else if (!route.autoindex) {
+                        res.setStatus(403, "Forbidden");
+                        res.setBody("Directory listing disabled");
+                        return res;
+                    }
+                } else if (!route.autoindex) {
                     res.setStatus(403, "Forbidden");
                     res.setBody("Directory listing disabled");
                     return res;

@@ -1,6 +1,8 @@
 package com.example.routing;
 
 import com.example.http.*;
+import com.example.config.RouteConfig;
+import com.example.config.ServerConfig;
 import com.example.handlers.*;
 
 public class Router {
@@ -10,12 +12,42 @@ public class Router {
     private final UploadHandler uploadHandler = new UploadHandler();
     private final CGIHandler cgiHandler = new CGIHandler();
 
-    public HTTPResponse route(HTTPRequest req, String root){
-        if(req.method.equals("GET")){
-            return staticFileHandler.handle(req, root); // where should i get the root form
-        } else{
-            return errorHandler.handle405(req);
+    public HTTPResponse route(HTTPRequest req, ServerConfig serverConfig) {
+        System.out.println("$$$$$$ Total routes: " + serverConfig.routes.size());
+        // System.out.println("entred HTTPResponse route()");
+        RouteConfig matched = null;
+        System.out.println("req.path: " + req.path);
+        for (RouteConfig route : serverConfig.routes) {
+            if (req.path.startsWith(route.path)) {
+                System.out.println("req.path: " + req.path + "\n route.path:  " + route.path);
+                matched = route;
+                break;
+            }
         }
+
+        if (matched == null) {
+            System.out.println("entred null condition!!!");
+            return errorHandler.handle404(req);
+        }
+        if (matched.redirect != null) {
+            HTTPResponse res = new HTTPResponse();
+            res.setStatus(matched.redirect.code, "Redirect");
+            res.addHeader("Location", matched.redirect.url);
+            return res;
+        }
+
+        // if (matched.methods != null && !matched.methods.contains(req.method)){
+        // rn errorHandler.handle405(req);
+        // }
+        // if (matched.cgi != null && !matched.cgi.isEmpty()){
+        // rn cgiHandler.handle(req, matched);
+        // }
+
+        // if(matched.uploadEnabled && req.method.equals("POST")){
+        // rn uploadHandler.handle(req, matched);
+        // }
+
+        return staticFileHandler.handle(req, matched);
     }
 
 }

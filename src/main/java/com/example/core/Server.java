@@ -11,10 +11,12 @@ import com.example.config.RouteConfig;
 import com.example.config.ServerConfig;
 import com.example.http.HTTPRequest;
 import com.example.http.HTTPResponse;
+import com.example.routing.Router;
 
 public class Server {
 
     private final ServerConfig config; // store full server config
+    private final Router router = new Router();
 
     public Server(ServerConfig config) {
         this.config = config;
@@ -38,7 +40,10 @@ public class Server {
 
             while (it.hasNext()) {
                 SelectionKey key = it.next();
-                System.out.println("=========\nSelectionKey: " + key.toString() + "\n=========");
+                // System.out.println(
+                //         "=========\nSelectionKey: " +
+                //                 key.toString() +
+                //                 "\n=========");
                 it.remove();
 
                 if (key.isAcceptable()) {
@@ -107,11 +112,7 @@ public class Server {
 
         // ----- PROCESS REQUEST -----
         if (ctx.state == ConnState.PROCESSING) {
-            HTTPResponse res = new HTTPResponse();
-            res.setStatus(200, "OK");
-            res.setBody("Hello, hell!");
-            res.addHeader("Content-Type", "text/plain");
-            res.addHeader("Content-Length", String.valueOf(res.getBody().length()));
+            HTTPResponse res = router.route(ctx.request, ctx.serverConfig);
 
             ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
             ctx.state = ConnState.WRITING_RESPONSE;

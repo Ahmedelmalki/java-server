@@ -11,11 +11,14 @@ import java.util.List;
 
 public class ConfigLoader {
     public static List<ServerConfig> load(String path) {
+        System.out.println("##### Loading config from: " + Path.of(path).toAbsolutePath());
+
         List<ServerConfig> servers = new ArrayList<>();
         try {
             JSONObject json = new JSONObject(Files.readString(Path.of(path)));
             JSONArray arr = json.getJSONArray("servers");
             for (int i = 0; i < arr.length(); i++) {
+
                 JSONObject s = arr.getJSONObject(i);
                 ServerConfig cfg = new ServerConfig();
 
@@ -30,9 +33,13 @@ public class ConfigLoader {
                 cfg.routes = new ArrayList<>();
                 JSONArray routesArray = s.getJSONArray("routes");
                 for (int j = 0; j < routesArray.length(); j++) {
+
                     JSONObject r = routesArray.getJSONObject(j);
                     RouteConfig route = new RouteConfig();
+
                     route.path = r.getString("path");
+                    System.out.println("Loaded route: path=" + route.path + ", root=" + route.root);
+
                     route.methods = new ArrayList<>();
                     if (r.has("methods")) {
                         JSONArray methodArray = r.getJSONArray("methods");

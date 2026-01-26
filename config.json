@@ -17,9 +17,8 @@
       "routes": [
         {
           "path": "/",
-          "methods": ["GET", "POST"],
-          "root": "www/html",
-          "index": "index.html",
+          "methods": ["GET"],
+          "root": "www",
           "autoindex": false
         },
         {
