@@ -9,16 +9,18 @@ public class Router {
 
     private final StaticFileHandler staticFileHandler = new StaticFileHandler();
     private final ErrorHandler errorHandler = new ErrorHandler();
-    private final UploadHandler uploadHandler = new UploadHandler();
 
-    public HTTPResponse route(HTTPRequest req, ServerConfig serverConfig) {
+    public HTTPResponse route(HTTPRequest req, ServerConfig serverConfig, byte[] body) {
+        // System.out.println("req.path: " + req.path);
 
         RouteConfig matched = null;
-        System.out.println("req.path: " + req.path);
+        int longestMatch = -1;
         for (RouteConfig route : serverConfig.routes) {
             if (req.path.startsWith(route.path)) {
-                matched = route;
-                break;
+                if (route.path.length() > longestMatch) {
+                    matched = route;
+                    longestMatch = route.path.length();
+                }
             }
         }
 
@@ -39,9 +41,9 @@ public class Router {
             return CGIHandler.handle(req, matched);
         }
 
-        // if(matched.uploadEnabled && req.method.equals("POST")){
-        // rn uploadHandler.handle(req, matched);
-        // }
+        if (matched.uploadEnabled && req.method.equals("POST")) {
+            return UploadHandler.handle(req, matched, body);
+        }
 
         return staticFileHandler.handle(req, matched);
     }

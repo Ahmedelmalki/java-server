@@ -83,36 +83,51 @@ public class Server {
 
         byte[] data = new byte[ctx.readBuffer.remaining()];
         ctx.readBuffer.get(data);
-        System.out.println("data :\n" + data.toString());
         ctx.readBuffer.clear();
 
         String chunk = new String(data);
         ctx.raw.append(chunk);
 
-        // ----- HEADER DETECTION -----
+        // ----- READING HEADERS -----
         if (ctx.state == ConnState.READING_HEADERS) {
-            if (!ctx.raw.toString().contains("\r\n\r\n")) {
-                // headers not complete yet
-                return;
-            }
-            ctx.request = HTTPRequest.parse(ctx.raw.toString());
-            for (RouteConfig route : ctx.serverConfig.routes) {
-                if (ctx.request.path.startsWith(route.path)) {
-                    ctx.matchedRoot = route.root;
-                    break;
-                }
+            int headerEnd = ctx.raw.indexOf("\r\n\r\n");
+            if (headerEnd == -1)
+                return; // not compelet yet
+
+            String headerPart = ctx.raw.substring(0, headerEnd + 4);
+            ctx.request = HTTPRequest.parse(headerPart);
+            String cl = ctx.request.headers.get("Content-Length");
+
+            if (cl != null) {
+                ctx.contentLength = Integer.parseInt(cl);
+                ctx.state = ConnState.READING_BODY;
+            } else {
+                ctx.contentLength = 0;
+                ctx.body = new byte[0];
+                ctx.state = ConnState.PROCESSING;
             }
 
+            ctx.raw.delete(0, headerEnd + 4);
+        }
+
+        // ----- READING BODY -----
+        if (ctx.state == ConnState.READING_BODY) {
+            byte[] current = ctx.raw.toString().getBytes();
+            if (current.length < ctx.contentLength)
+                return; // still waiting for full body
+
+            ctx.body = new byte[ctx.contentLength];
+            System.arraycopy(current, 0, ctx.body, 0, ctx.contentLength);
             ctx.state = ConnState.PROCESSING;
         }
 
         // ----- PROCESS REQUEST -----
         if (ctx.state == ConnState.PROCESSING) {
-            HTTPResponse res = router.route(ctx.request, ctx.serverConfig);
+            HTTPResponse res = router.route(ctx.request, ctx.serverConfig, ctx.body);
+            System.out.println("$$$ body: " + ctx.body.toString());
 
             ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
             ctx.state = ConnState.WRITING_RESPONSE;
-
             key.interestOps(SelectionKey.OP_WRITE);
         }
     }
