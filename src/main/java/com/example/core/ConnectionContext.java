@@ -15,10 +15,11 @@ public class ConnectionContext {
     public ConnState state = ConnState.READING_HEADERS;
 
     public ServerConfig serverConfig;
-    public String matchedRoot; // todo: remove this shit
-
     public RouteConfig matchedRoute;
+    public String matchedRoot; // todo: remove this shit
 
     public int contentLength = 0;
     public byte[] body;
+
+    public long connectionStartTime = System.currentTimeMillis();
 }

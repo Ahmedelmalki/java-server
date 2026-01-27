@@ -22,7 +22,7 @@ public class StaticFileHandler {
             Path root = Path.of(route.root).toAbsolutePath().normalize();
             Path file = root.resolve(relPath.startsWith("/") ? relPath.substring(1) : relPath).normalize();
             
-            System.out.println("==========\n real path: " + relPath + "\nfile: " + file.toString());
+            // System.out.println("==========\n real path: " + relPath + "\nfile: " + file.toString());
 
             // Directory traversal protection
             if (!file.startsWith(root)) {

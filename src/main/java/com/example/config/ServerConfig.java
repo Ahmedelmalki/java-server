@@ -7,4 +7,5 @@ public class ServerConfig {
     public List<Integer> ports;
     public boolean isDefault;
     public List<RouteConfig> routes;
+    public long timeout;
 }

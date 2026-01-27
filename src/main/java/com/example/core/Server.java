@@ -4,14 +4,11 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
-import java.util.Iterator;
-import java.util.Set;
-
-import com.example.config.RouteConfig;
-import com.example.config.ServerConfig;
-import com.example.http.HTTPRequest;
-import com.example.http.HTTPResponse;
-import com.example.routing.Router;
+import java.util.*;
+import com.example.config.*;
+import com.example.http.*;
+import com.example.routing.*;
+import java.nio.charset.*;
 
 public class Server {
 
@@ -34,7 +31,9 @@ public class Server {
         }
 
         while (true) {
-            selector.select();
+            selector.select(1000);
+            checkTimeouts(selector);
+
             Set<SelectionKey> keys = selector.selectedKeys();
             Iterator<SelectionKey> it = keys.iterator();
 
@@ -72,12 +71,15 @@ public class Server {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
+        System.out.println("is readBuffer direct: " + ctx.readBuffer.isDirect());
         int bytesRead = client.read(ctx.readBuffer);
 
         if (bytesRead == -1) {
             client.close();
             return;
         }
+        // System.out.println("buffer :
+        // "+StandardCharsets.UTF_8.decode(ctx.readBuffer));
 
         ctx.readBuffer.flip(); // switch buffer to read mode
 
@@ -124,7 +126,7 @@ public class Server {
         // ----- PROCESS REQUEST -----
         if (ctx.state == ConnState.PROCESSING) {
             HTTPResponse res = router.route(ctx.request, ctx.serverConfig, ctx.body);
-            System.out.println("$$$ body: " + ctx.body.toString());
+            // System.out.println("$$$ body: " + ctx.body.toString());
 
             ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
             ctx.state = ConnState.WRITING_RESPONSE;
@@ -136,10 +138,62 @@ public class Server {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
+        // System.out.println("buffer :
+        // "+StandardCharsets.UTF_8.decode(ctx.writeBuffer));
         client.write(ctx.writeBuffer);
         if (!ctx.writeBuffer.hasRemaining()) {
             ctx.state = ConnState.CLOSED;
             client.close();
         }
+    }
+
+    private void checkTimeouts(Selector selector) {
+        long currentTime = System.currentTimeMillis();
+
+        for (SelectionKey key : selector.keys()) {
+            if (key.channel() instanceof ServerSocketChannel) {
+                continue; // skip server socket channel
+            }
+
+            if (key.attachment() instanceof ConnectionContext) {
+                ConnectionContext ctx = (ConnectionContext) key.attachment();
+                long elapsed = currentTime - ctx.connectionStartTime;
+
+                if (elapsed > ctx.serverConfig.timeout) {
+                    System.out.println("Connection timed out after " + elapsed + "ms");
+
+                    try {
+                        if (ctx.state != ConnState.WRITING_RESPONSE && ctx.state != ConnState.CLOSED) {
+                            sendTimeoutResponse(key);
+                        } else {
+                            key.channel().close();
+                            key.cancel();
+                        }
+                    } catch (IOException ex) {
+                        System.err.println("error closing connection" + ex.getMessage());
+                        key.cancel();
+                    }
+                }
+            }
+        }
+    }
+
+    private void sendTimeoutResponse(SelectionKey key) throws IOException {
+        SocketChannel client = (SocketChannel) key.channel();
+        ConnectionContext ctx = (ConnectionContext) key.attachment();
+
+        HTTPResponse res = new HTTPResponse();
+        res.setStatus(408, "Request Timeout");
+        res.setBody("Request Timeout");
+        res.addHeader("Content-Type", "text/plain");
+        res.addHeader("Content-Length", String.valueOf(res.getBody().length()));
+        res.addHeader("Connection", "close");
+
+        ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
+        ctx.state = ConnState.WRITING_RESPONSE;
+
+        client.write(ctx.writeBuffer);
+        client.close();
+        key.cancel();
     }
 }
