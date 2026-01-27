@@ -40,10 +40,6 @@ public class Server {
 
             while (it.hasNext()) {
                 SelectionKey key = it.next();
-                // System.out.println(
-                //         "=========\nSelectionKey: " +
-                //                 key.toString() +
-                //                 "\n=========");
                 it.remove();
 
                 if (key.isAcceptable()) {

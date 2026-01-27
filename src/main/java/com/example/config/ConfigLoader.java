@@ -11,7 +11,7 @@ import java.util.List;
 
 public class ConfigLoader {
     public static List<ServerConfig> load(String path) {
-        System.out.println("##### Loading config from: " + Path.of(path).toAbsolutePath());
+        // System.out.println("##### Loading config from: " + Path.of(path).toAbsolutePath());
 
         List<ServerConfig> servers = new ArrayList<>();
         try {
@@ -38,7 +38,7 @@ public class ConfigLoader {
                     RouteConfig route = new RouteConfig();
 
                     route.path = r.getString("path");
-                    System.out.println("Loaded route: path=" + route.path + ", root=" + route.root);
+                    // System.out.println("Loaded route: path=" + route.path + ", root=" + route.root);
 
                     route.methods = new ArrayList<>();
                     if (r.has("methods")) {

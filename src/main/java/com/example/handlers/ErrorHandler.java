@@ -2,7 +2,6 @@ package com.example.handlers;
 
 import com.example.http.HTTPRequest;
 import com.example.http.HTTPResponse;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
