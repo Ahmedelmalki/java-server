@@ -41,6 +41,10 @@ public class Router {
             return CGIHandler.handle(req, matched);
         }
 
+        if (req.method.equals("DELETE")) {
+            return Deletehandler.handle(req, matched);
+        }
+
         if (matched.uploadEnabled && req.method.equals("POST")) {
             return UploadHandler.handle(req, matched, body);
         }

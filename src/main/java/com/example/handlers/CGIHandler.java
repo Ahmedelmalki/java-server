@@ -1,9 +1,11 @@
 package com.example.handlers;
 
-import com.example.http.HTTPRequest;
-import com.example.http.HTTPResponse;
+import com.example.http.*;
 import com.example.config.RouteConfig;
-import java.nio.file.Path;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 public class CGIHandler {
 
@@ -11,30 +13,44 @@ public class CGIHandler {
         HTTPResponse res = new HTTPResponse();
 
         try {
-            String scriptPath = route.root + req.path.substring(route.path.length());
-            System.out.println("route.root: " + route.root + "\n req.path.length(): " + route.path.length());
-            System.out.println("script path: " + scriptPath);
+            String scriptPath = resolveScriptPath(req, route);
+            String interpreter = resolveInterpreter(scriptPath, route);
+            ProcessBuilder pb = new ProcessBuilder(interpreter, scriptPath);
+            Map<String, String> env = pb.environment();
 
-            Path script = Path.of(scriptPath);
-            String ext = getExt(script.toString());
-            String interpreter = route.cgi.get(ext);
+            // ---- CGI ENV ----
+            env.put("GATEWAY_INTERFACE", "CGI/1.1");
+            env.put("SERVER_PROTOCOL", "HTTP/1.1");
+            env.put("REQUEST_METHOD", req.method);
+            env.put("SCRIPT_FILENAME", scriptPath);
+            env.put("SCRIPT_NAME", req.path);
+            env.put("QUERY_STRING", extractQuery(req.path));
+            env.put("CONTENT_TYPE", req.headers.getOrDefault("Content-Type", ""));
+            env.put("CONTENT_LENGTH", req.headers.getOrDefault("Content-Length", ""));
+            env.put("REMOTE_ADDR", "127.0.0.1");
 
-            if (interpreter == null) {
-                res.setStatus(404, "Not Found");
-                res.setBody("No CGI handler for " + ext);
-                return res;
+            for (Map.Entry<String, String> h : req.headers.entrySet()) {
+                String key = "HTTP_" + h.getKey().toUpperCase().replace('-', '_');
+                System.out.println("key: " + key + " value: " + h.getValue());
+                env.put(key, h.getValue());
+            }
+            pb.redirectErrorStream(true);
+            Process proc = pb.start();
+
+            if (req.body != null && !req.body.isEmpty()) {
+                try (OutputStream out = proc.getOutputStream()) {
+                    out.write(req.body.getBytes(StandardCharsets.UTF_8));
+                }
+            } else {
+                proc.getOutputStream().close();
             }
 
- 
-            ProcessBuilder pb = new ProcessBuilder(interpreter, script.toString());
-            Process p = pb.start();
-            String output = new String(p.getInputStream().readAllBytes());
+            String cgiOutput;
+            try (InputStream in = proc.getInputStream()) {
+                cgiOutput = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
 
-            res.setStatus(200, "OK");
-            res.setBody(output);
-            res.addHeader("Content-Type", "text/plain");
-            res.addHeader("Content-Length", String.valueOf(output.length()));
-            return res;
+            return parseCgiOutput(cgiOutput);
         } catch (Exception ex) {
             System.err.println("oh no: " + ex.getMessage());
             res.setStatus(500, "Internal Server Error");
@@ -43,8 +59,61 @@ public class CGIHandler {
         }
     }
 
-    private static String getExt(String path) {
-        int i = path.lastIndexOf('.');
-        return i == -1 ? "" : path.substring(i);
+    private static String resolveScriptPath(HTTPRequest req, RouteConfig route) {
+        String rel = req.path.substring(route.path.length());
+        if (rel.isEmpty() || rel.equals("/")) {
+            throw new RuntimeException("No CGI script specified");
+        }
+        return route.root + rel;
+    }
+
+    private static String resolveInterpreter(String scriptPath, RouteConfig route) {
+        for (String ext : route.cgi.keySet()) {
+            if (scriptPath.endsWith(ext)) {
+                return route.cgi.get(ext);
+            }
+        }
+        throw new RuntimeException("No CGI interpreter for script: " + scriptPath);
+    }
+
+    private static String extractQuery(String path) {
+        int idx = path.indexOf('?');
+        return idx >= 0 ? path.substring(idx + 1) : "";
+    }
+
+    // ---- IMPORTANT: Parse CGI headers ----
+    private static HTTPResponse parseCgiOutput(String out) {
+        HTTPResponse res = new HTTPResponse();
+
+        String[] parts = out.split("\r?\n\r?\n", 2);
+        String headerBlock = parts.length > 0 ? parts[0] : "";
+        String body = parts.length > 1 ? parts[1] : "";
+
+        int status = 200;
+        String statusText = "OK";
+
+        for (String line : headerBlock.split("\r?\n")) {
+            if (line.isBlank())
+                continue;
+
+            if (line.startsWith("Status:")) {
+                // Status: 302 Found
+                String[] s = line.substring(7).trim().split(" ", 2);
+                status = Integer.parseInt(s[0]);
+                if (s.length > 1)
+                    statusText = s[1];
+            } else {
+                int idx = line.indexOf(':');
+                if (idx > 0) {
+                    String k = line.substring(0, idx).trim();
+                    String v = line.substring(idx + 1).trim();
+                    res.addHeader(k, v);
+                }
+            }
+        }
+
+        res.setStatus(status, statusText);
+        res.setBody(body);
+        return res;
     }
 }

@@ -8,6 +8,7 @@ public class HTTPRequest {
     public String path;
     public String version;
     public Map<String, String> headers = new HashMap<>();
+    public String body; /*######## BODY ########*/
 
     public static HTTPRequest parse(String raw) {
         HTTPRequest req = new HTTPRequest();

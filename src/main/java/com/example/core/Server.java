@@ -8,7 +8,6 @@ import java.util.*;
 import com.example.config.*;
 import com.example.http.*;
 import com.example.routing.*;
-import java.nio.charset.*;
 
 public class Server {
 
@@ -71,7 +70,7 @@ public class Server {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
-        System.out.println("is readBuffer direct: " + ctx.readBuffer.isDirect());
+        // System.out.println("is readBuffer direct: " + ctx.readBuffer.isDirect());
         int bytesRead = client.read(ctx.readBuffer);
 
         if (bytesRead == -1) {
@@ -105,7 +104,7 @@ public class Server {
                 ctx.state = ConnState.READING_BODY;
             } else {
                 ctx.contentLength = 0;
-                ctx.body = new byte[0];
+                ctx.body = new byte[0]; // TODO: remove duplcated fields
                 ctx.state = ConnState.PROCESSING;
             }
 

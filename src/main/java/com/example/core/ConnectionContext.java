@@ -11,12 +11,12 @@ public class ConnectionContext {
 
     public StringBuilder raw = new StringBuilder();
 
-    public HTTPRequest request; // Parsed request
+    public HTTPRequest request; 
     public ConnState state = ConnState.READING_HEADERS;
 
     public ServerConfig serverConfig;
     public RouteConfig matchedRoute;
-    public String matchedRoot; // todo: remove this shit
+    public String matchedRoot; 
 
     public int contentLength = 0;
     public byte[] body;
