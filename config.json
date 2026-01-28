@@ -19,7 +19,7 @@
           "path": "/",
           "methods": ["GET"],
           "root": "www",
-          "autoindex": false
+          "autoindex": true
         },
         {
           "path": "/uploads",
