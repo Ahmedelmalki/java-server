@@ -26,7 +26,7 @@ public class ConfigLoader {
                 cfg.host = s.getString("host");
                 cfg.isDefault = s.getBoolean("isDefault");
                 cfg.timeout = s.optLong("timeout", 30000);
-                System.out.println("$$$ timeout : " + cfg.timeout);
+                // System.out.println("$$$ timeout : " + cfg.timeout);
 
                 cfg.ports = new ArrayList<>();
                 for (Object p : s.getJSONArray("ports")) {

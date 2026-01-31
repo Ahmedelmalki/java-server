@@ -1,9 +1,10 @@
 package com.example.routing;
 
 import com.example.http.*;
-import com.example.config.RouteConfig;
-import com.example.config.ServerConfig;
+import com.example.session.*;
+import com.example.config.*;
 import com.example.handlers.*;
+import java.util.Map;
 
 public class Router {
 
@@ -12,6 +13,13 @@ public class Router {
 
     public HTTPResponse route(HTTPRequest req, ServerConfig serverConfig, byte[] body) {
         // System.out.println("req.path: " + req.path);
+
+        // ------- SESSION MANAGMENT -------
+        String cookieHeader = req.headers.get("Cookie");
+        Map<String, String> cookies = Cookie.parseCookieHeader(cookieHeader);
+        SessionManager sm = SessionManager.getInstance();
+        Session session = sm.getSession(cookies, true);
+        // ------- END SESSION MANAGMENT -------
 
         RouteConfig matched = null;
         int longestMatch = -1;
@@ -23,33 +31,32 @@ public class Router {
                 }
             }
         }
+        HTTPResponse res = new HTTPResponse();
 
         if (matched == null) {
-            return errorHandler.handle404(req);
-        }
-        if (matched.redirect != null) {
-            HTTPResponse res = new HTTPResponse();
+            res = errorHandler.handle404(req);
+        } else if (matched.methods != null && !matched.methods.contains(req.method)) {
+            res = errorHandler.handle405(req);
+        } else if (matched.redirect != null) {
             res.setStatus(matched.redirect.code, "Redirect");
             res.addHeader("Location", matched.redirect.url);
-            return res;
+        } else if (matched.cgi != null && !matched.cgi.isEmpty()) {
+            res = CGIHandler.handle(req, matched);
+        } else if (req.method.equals("DELETE")) {
+            res = Deletehandler.handle(req, matched);
+        } else if (matched.uploadEnabled && req.method.equals("POST")) {
+            res = UploadHandler.handle(req, matched, body);
+        } else {
+            res = staticFileHandler.handle(req, matched, session);
         }
 
-        if (matched.methods != null && !matched.methods.contains(req.method)) {
-            return errorHandler.handle405(req);
+        if (!cookies.containsKey("JSESSIONID")) {
+            Cookie sessionCookie = sm.createSessionCookie(session);
+            res.addCookie(sessionCookie);
+            System.out.println("Sending new session cookie: " + session.getSessionId());
         }
-        if (matched.cgi != null && !matched.cgi.isEmpty()) {
-            return CGIHandler.handle(req, matched);
-        }
-
-        if (req.method.equals("DELETE")) {
-            return Deletehandler.handle(req, matched);
-        }
-
-        if (matched.uploadEnabled && req.method.equals("POST")) {
-            return UploadHandler.handle(req, matched, body);
-        }
-
-        return staticFileHandler.handle(req, matched);
+        
+        return res;
     }
 
 }

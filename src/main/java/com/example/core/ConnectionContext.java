@@ -1,6 +1,7 @@
 package com.example.core;
 
 import com.example.http.HTTPRequest;
+import com.example.session.Session;
 import com.example.config.RouteConfig;
 import com.example.config.ServerConfig;
 import java.nio.ByteBuffer;
@@ -22,4 +23,6 @@ public class ConnectionContext {
     public byte[] body;
 
     public long connectionStartTime = System.currentTimeMillis();
+
+    public Session session;
 }

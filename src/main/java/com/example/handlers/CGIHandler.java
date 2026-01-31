@@ -37,9 +37,9 @@ public class CGIHandler {
             pb.redirectErrorStream(true);
             Process proc = pb.start();
 
-            if (req.body != null && !req.body.isEmpty()) {
+            if (req.body != null && req.getBodyLength() != 0) {
                 try (OutputStream out = proc.getOutputStream()) {
-                    out.write(req.body.getBytes(StandardCharsets.UTF_8));
+                    out.write(req.getBodyBytes());
                 }
             } else {
                 proc.getOutputStream().close();
@@ -81,7 +81,7 @@ public class CGIHandler {
         return idx >= 0 ? path.substring(idx + 1) : "";
     }
 
-    // ---- IMPORTANT: Parse CGI headers ----
+    // ---- Parse CGI headers ----
     private static HTTPResponse parseCgiOutput(String out) {
         HTTPResponse res = new HTTPResponse();
 

@@ -11,7 +11,7 @@ import com.example.routing.*;
 
 public class Server {
 
-    private final ServerConfig config; // store full server config
+    private final ServerConfig config;
     private final Router router = new Router();
 
     public Server(ServerConfig config) {
@@ -70,17 +70,14 @@ public class Server {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
-        // System.out.println("is readBuffer direct: " + ctx.readBuffer.isDirect());
         int bytesRead = client.read(ctx.readBuffer);
 
         if (bytesRead == -1) {
             client.close();
             return;
         }
-        // System.out.println("buffer :
-        // "+StandardCharsets.UTF_8.decode(ctx.readBuffer));
 
-        ctx.readBuffer.flip(); // switch buffer to read mode
+        ctx.readBuffer.flip();
 
         byte[] data = new byte[ctx.readBuffer.remaining()];
         ctx.readBuffer.get(data);
@@ -97,6 +94,12 @@ public class Server {
 
             String headerPart = ctx.raw.substring(0, headerEnd + 4);
             ctx.request = HTTPRequest.parse(headerPart);
+
+            if (ctx.request == null) {
+                sendBadRequestResponse(key);
+                return;
+            }
+
             String cl = ctx.request.headers.get("Content-Length");
 
             if (cl != null) {
@@ -104,7 +107,7 @@ public class Server {
                 ctx.state = ConnState.READING_BODY;
             } else {
                 ctx.contentLength = 0;
-                ctx.body = new byte[0]; // TODO: remove duplcated fields
+                ctx.body = new byte[0];
                 ctx.state = ConnState.PROCESSING;
             }
 
@@ -124,6 +127,8 @@ public class Server {
 
         // ----- PROCESS REQUEST -----
         if (ctx.state == ConnState.PROCESSING) {
+            ctx.request.setBody(ctx.body);
+
             HTTPResponse res = router.route(ctx.request, ctx.serverConfig, ctx.body);
             // System.out.println("$$$ body: " + ctx.body.toString());
 
@@ -137,8 +142,6 @@ public class Server {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
-        // System.out.println("buffer :
-        // "+StandardCharsets.UTF_8.decode(ctx.writeBuffer));
         client.write(ctx.writeBuffer);
         if (!ctx.writeBuffer.hasRemaining()) {
             ctx.state = ConnState.CLOSED;
@@ -186,6 +189,25 @@ public class Server {
         res.setBody("Request Timeout");
         res.addHeader("Content-Type", "text/plain");
         res.addHeader("Content-Length", String.valueOf(res.getBody().length()));
+        res.addHeader("Connection", "close");
+
+        ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
+        ctx.state = ConnState.WRITING_RESPONSE;
+
+        client.write(ctx.writeBuffer);
+        client.close();
+        key.cancel();
+    }
+
+    private void sendBadRequestResponse(SelectionKey key) throws IOException {
+        SocketChannel client = (SocketChannel) key.channel();
+        ConnectionContext ctx = (ConnectionContext) key.attachment();
+
+        HTTPResponse res = new HTTPResponse();
+        res.setStatus(400, "Bad Request");
+        res.setBody("Malformed HTTP request"); // setBody() converts to bytes
+        res.addHeader("Content-Type", "text/plain");
+        res.addHeader("Content-Length", String.valueOf(res.getBodyLength())); // getBodyLength() returns bytes.length
         res.addHeader("Connection", "close");
 
         ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());

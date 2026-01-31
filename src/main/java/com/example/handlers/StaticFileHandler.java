@@ -1,20 +1,23 @@
 package com.example.handlers;
 
 import com.example.config.RouteConfig;
-import com.example.http.HTTPRequest;
-import com.example.http.HTTPResponse;
-
+import com.example.http.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
+import com.example.session.*;
 
 public class StaticFileHandler {
 
-    public HTTPResponse handle(HTTPRequest req, RouteConfig route) {
+    public HTTPResponse handle(HTTPRequest req, RouteConfig route, Session session) {
         HTTPResponse res = new HTTPResponse();
 
         try {
+            if (session != null) {
+                session.setAttribute("lastFile", req.path);
+            }
+
             String relPath = req.path.substring(route.path.length());
             if (relPath.isEmpty() || relPath.equals("/")) {
                 relPath = "/" + (route.index != null ? route.index : "index.html");
