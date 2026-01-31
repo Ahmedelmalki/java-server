@@ -2,24 +2,20 @@ package com.example.session;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 public class SessionManager {
     private static final String SESSION_COOKIE_NAME = "JSESSIONID";
     private static SessionManager instance;
 
     private final Map<String, Session> sessions;
-    private final ScheduledExecutorService cleanupEexcutor;
     private long defaultMaxInactiveInterval;
+    private long lastCleanupTime;
 
     private SessionManager() {
         System.out.println("@@@ entered SessionManager()");
         this.sessions = new ConcurrentHashMap<>();
         this.defaultMaxInactiveInterval = 1800;
-        this.cleanupEexcutor = Executors.newSingleThreadScheduledExecutor();
-        scheduleCleanup();
+        this.lastCleanupTime = System.currentTimeMillis();
     }
 
     public static synchronized SessionManager getInstance() {
@@ -108,7 +104,16 @@ public class SessionManager {
         return Cookie.createDeleteCookie(SESSION_COOKIE_NAME);
     }
 
-    private void cleanupExpiredSessions() {
+    public void cleanupExpiredSessions() {
+        long currentTime = System.currentTimeMillis();
+
+        // Only run cleanup every 5 minutes to avoid excessive overhead
+        if (currentTime - lastCleanupTime < 300000) {
+            return;
+        }
+
+        lastCleanupTime = currentTime;
+
         int removed = 0;
         for (Map.Entry<String, Session> e : sessions.entrySet()) {
             if (e.getValue().isExpired()) {
@@ -119,23 +124,6 @@ public class SessionManager {
 
         if (removed > 0) {
             System.out.println("Cleaned up " + removed + " expired sessions. Active sessions: " + sessions.size());
-        }
-    }
-
-    private void scheduleCleanup() {
-        cleanupEexcutor.scheduleAtFixedRate(
-                this::cleanupExpiredSessions, 5, 5, TimeUnit.MINUTES);
-    }
-
-    public void shutDown() {
-        cleanupEexcutor.shutdown();
-        try {
-            if (!cleanupEexcutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                cleanupEexcutor.shutdownNow();
-            }
-        } catch (InterruptedException ex) {
-            cleanupEexcutor.shutdownNow();
-            Thread.currentThread().interrupt();
         }
     }
 

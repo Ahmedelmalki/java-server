@@ -26,6 +26,7 @@ public class ConfigLoader {
                 cfg.host = s.getString("host");
                 cfg.isDefault = s.getBoolean("isDefault");
                 cfg.timeout = s.optLong("timeout", 30000);
+                cfg.clientMaxBodySize = s.optLong("clientMaxBodySize", 5242880);
                 // System.out.println("$$$ timeout : " + cfg.timeout);
 
                 cfg.ports = new ArrayList<>();

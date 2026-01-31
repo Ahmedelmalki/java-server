@@ -8,6 +8,7 @@ import java.util.*;
 import com.example.config.*;
 import com.example.http.*;
 import com.example.routing.*;
+import com.example.session.SessionManager;
 
 public class Server {
 
@@ -32,6 +33,7 @@ public class Server {
         while (true) {
             selector.select(1000);
             checkTimeouts(selector);
+            SessionManager.getInstance().cleanupExpiredSessions();
 
             Set<SelectionKey> keys = selector.selectedKeys();
             Iterator<SelectionKey> it = keys.iterator();
@@ -110,6 +112,8 @@ public class Server {
                 ctx.body = new byte[0];
                 ctx.state = ConnState.PROCESSING;
             }
+
+            System.out.println("=========\n clientMaxBodySize: " + ctx.serverConfig.clientMaxBodySize);
 
             ctx.raw.delete(0, headerEnd + 4);
         }

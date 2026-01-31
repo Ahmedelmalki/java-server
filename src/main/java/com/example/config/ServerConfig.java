@@ -8,4 +8,5 @@ public class ServerConfig {
     public boolean isDefault;
     public List<RouteConfig> routes;
     public long timeout;
+    public long clientMaxBodySize;
 }
