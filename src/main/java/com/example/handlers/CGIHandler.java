@@ -31,7 +31,7 @@ public class CGIHandler {
 
             for (Map.Entry<String, String> h : req.headers.entrySet()) {
                 String key = "HTTP_" + h.getKey().toUpperCase().replace('-', '_');
-                System.out.println("key: " + key + " value: " + h.getValue());
+                // System.out.println("key: " + key + " value: " + h.getValue());
                 env.put(key, h.getValue());
             }
             pb.redirectErrorStream(true);
