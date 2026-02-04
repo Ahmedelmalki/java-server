@@ -1,5 +1,6 @@
 package com.example.core;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -32,6 +33,8 @@ public class Server {
 
         while (true) {
             selector.select(1000);
+
+            // Cleanup sessions and timeouts in the main event loop
             checkTimeouts(selector);
             SessionManager.getInstance().cleanupExpiredSessions();
 
@@ -85,16 +88,25 @@ public class Server {
         ctx.readBuffer.get(data);
         ctx.readBuffer.clear();
 
-        String chunk = new String(data);
-        ctx.raw.append(chunk);
+        // Append to raw byte buffer
+        if (ctx.rawBytes == null) {
+            ctx.rawBytes = new ByteArrayOutputStream();
+        }
+        ctx.rawBytes.write(data, 0, data.length);
 
         // ----- READING HEADERS -----
         if (ctx.state == ConnState.READING_HEADERS) {
-            int headerEnd = ctx.raw.indexOf("\r\n\r\n");
-            if (headerEnd == -1)
-                return; // not compelet yet
+            byte[] allBytes = ctx.rawBytes.toByteArray();
+            int headerEnd = findHeaderEnd(allBytes);
 
-            String headerPart = ctx.raw.substring(0, headerEnd + 4);
+            if (headerEnd == -1)
+                return; // not complete yet
+
+            // Extract headers as string
+            byte[] headerBytes = new byte[headerEnd + 4];
+            System.arraycopy(allBytes, 0, headerBytes, 0, headerEnd + 4);
+            String headerPart = new String(headerBytes);
+
             ctx.request = HTTPRequest.parse(headerPart);
 
             if (ctx.request == null) {
@@ -103,31 +115,30 @@ public class Server {
             }
 
             String transferEncoding = ctx.request.headers.get("Transfer-Encoding");
-            System.out.println("debug: ");
-            for (Map.Entry<String, String> h : ctx.request.headers.entrySet()) {
-                System.out.println("K: " + h.getKey() + " V: " + h.getValue());
-            }
-            System.out.print("end debug");
-
             String cl = ctx.request.headers.get("Content-Length");
 
+            // Check for chunked transfer encoding
             if (transferEncoding != null && transferEncoding.toLowerCase().contains("chunked")) {
                 ctx.isChunked = true;
                 ctx.state = ConnState.READING_BODY;
-                System.out.println("@@ Chunked transfer encoding detected @@");
+                ctx.chunkBodyBuffer = new ByteArrayOutputStream();
+                System.out.println("Chunked transfer encoding detected");
             } else if (cl != null) {
                 try {
                     ctx.contentLength = Integer.parseInt(cl);
-                    long bs = ctx.serverConfig.clientMaxBodySize;
-                    if (bs > 0 && ctx.contentLength > bs) {
+
+                    // ===== ENFORCE CLIENT BODY SIZE LIMIT =====
+                    long maxBodySize = ctx.serverConfig.clientMaxBodySize;
+                    if (maxBodySize > 0 && ctx.contentLength > maxBodySize) {
                         System.err.println(
-                                "Request body too large: " + ctx.contentLength + " bytes (max: " + bs + ")");
+                                "Request body too large: " + ctx.contentLength + " bytes (max: " + maxBodySize + ")");
                         send413Response(key);
                         return;
                     }
+                    // ==========================================
+
                     ctx.state = ConnState.READING_BODY;
                 } catch (NumberFormatException e) {
-                    System.err.println("oh no: " + e.getMessage());
                     sendBadRequestResponse(key);
                     return;
                 }
@@ -137,17 +148,31 @@ public class Server {
                 ctx.state = ConnState.PROCESSING;
             }
 
-            ctx.raw.delete(0, headerEnd + 4);
+            // Remove headers from buffer, keep only body data
+            byte[] remaining = new byte[allBytes.length - (headerEnd + 4)];
+            System.arraycopy(allBytes, headerEnd + 4, remaining, 0, remaining.length);
+            ctx.rawBytes = new ByteArrayOutputStream();
+            ctx.rawBytes.write(remaining, 0, remaining.length);
         }
 
         // ----- READING BODY -----
         if (ctx.state == ConnState.READING_BODY) {
             if (ctx.isChunked) {
-                if (readChunkedBody(ctx)) {
+                // Handle chunked transfer encoding with state machine
+                ChunkParseResult result = readChunkedBodyIncremental(ctx);
+                if (result == ChunkParseResult.DONE) {
                     ctx.state = ConnState.PROCESSING;
+                } else if (result == ChunkParseResult.ERROR) {
+                    sendBadRequestResponse(key);
+                    return;
+                } else if (result == ChunkParseResult.TOO_LARGE) {
+                    send413Response(key);
+                    return;
                 }
+                // NEED_MORE_DATA: just return and wait for next read
             } else {
-                byte[] current = ctx.raw.toString().getBytes();
+                // Handle regular body with Content-Length
+                byte[] current = ctx.rawBytes.toByteArray();
                 if (current.length < ctx.contentLength)
                     return; // still waiting for full body
 
@@ -162,12 +187,179 @@ public class Server {
             ctx.request.setBody(ctx.body);
 
             HTTPResponse res = router.route(ctx.request, ctx.serverConfig, ctx.body);
-            // System.out.println("$$$ body: " + ctx.body.toString());
 
             ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
             ctx.state = ConnState.WRITING_RESPONSE;
             key.interestOps(SelectionKey.OP_WRITE);
         }
+    }
+
+    private enum ChunkParseResult {
+        NEED_MORE_DATA,
+        DONE,
+        ERROR,
+        TOO_LARGE
+    }
+
+    private ChunkParseResult readChunkedBodyIncremental(ConnectionContext ctx) throws IOException {
+        byte[] buffer = ctx.rawBytes.toByteArray();
+        int pos = 0;
+        int len = buffer.length;
+
+        while (pos < len) {
+            byte b = buffer[pos];
+
+            switch (ctx.chunkState) {
+                case CHUNK_SIZE:
+                    if (b == '\r') {
+                        // End of chunk size line, expect \n next
+                        pos++;
+                        ctx.chunkState = ChunkState.CHUNK_SIZE;
+                        // Check for \n
+                        if (pos >= len) {
+                            // Need more data
+                            ctx.rawBytes = new ByteArrayOutputStream();
+                            ctx.rawBytes.write(buffer, pos - 1, len - (pos - 1));
+                            return ChunkParseResult.NEED_MORE_DATA;
+                        }
+                        if (buffer[pos] != '\n') {
+                            System.err.println("Expected \\n after \\r in chunk size line");
+                            return ChunkParseResult.ERROR;
+                        }
+                        pos++;
+
+                        // Parse chunk size
+                        String sizeStr = ctx.chunkSizeLine.toString().trim();
+                        // Handle chunk extensions
+                        int semicolon = sizeStr.indexOf(';');
+                        if (semicolon != -1) {
+                            sizeStr = sizeStr.substring(0, semicolon);
+                        }
+
+                        try {
+                            ctx.currentChunkSize = Integer.parseInt(sizeStr, 16);
+                        } catch (NumberFormatException e) {
+                            System.err.println("Invalid chunk size: " + sizeStr);
+                            return ChunkParseResult.ERROR;
+                        }
+
+                        ctx.chunkSizeLine = new StringBuilder();
+                        ctx.currentChunkBytesRead = 0;
+
+                        if (ctx.currentChunkSize == 0) {
+                            // Last chunk
+                            ctx.chunkState = ChunkState.CHUNK_TRAILER;
+                        } else {
+                            // Check body size limit
+                            int currentSize = ctx.chunkBodyBuffer.size();
+                            if (ctx.serverConfig.clientMaxBodySize > 0 &&
+                                    currentSize + ctx.currentChunkSize > ctx.serverConfig.clientMaxBodySize) {
+                                System.err.println("Chunked body exceeds max size");
+                                return ChunkParseResult.TOO_LARGE;
+                            }
+                            ctx.chunkState = ChunkState.CHUNK_DATA;
+                        }
+                    } else if (b == '\n') {
+                        // Invalid: \n without \r
+                        System.err.println("Invalid chunk size line: \\n without \\r");
+                        return ChunkParseResult.ERROR;
+                    } else {
+                        // Accumulate chunk size character
+                        ctx.chunkSizeLine.append((char) b);
+                        pos++;
+                    }
+                    break;
+
+                case CHUNK_DATA:
+                    // Read chunk data bytes
+                    int bytesNeeded = ctx.currentChunkSize - ctx.currentChunkBytesRead;
+                    int bytesAvailable = len - pos;
+                    int bytesToRead = Math.min(bytesNeeded, bytesAvailable);
+
+                    if (bytesToRead > 0) {
+                        ctx.chunkBodyBuffer.write(buffer, pos, bytesToRead);
+                        ctx.currentChunkBytesRead += bytesToRead;
+                        pos += bytesToRead;
+                    }
+
+                    if (ctx.currentChunkBytesRead == ctx.currentChunkSize) {
+                        // Finished reading chunk data, expect \r\n
+                        ctx.chunkState = ChunkState.CHUNK_CR;
+                    }
+                    break;
+
+                case CHUNK_CR:
+                    if (b != '\r') {
+                        System.err.println("Expected \\r after chunk data");
+                        return ChunkParseResult.ERROR;
+                    }
+                    pos++;
+                    ctx.chunkState = ChunkState.CHUNK_LF;
+                    break;
+
+                case CHUNK_LF:
+                    if (b != '\n') {
+                        System.err.println("Expected \\n after chunk data \\r");
+                        return ChunkParseResult.ERROR;
+                    }
+                    pos++;
+                    // Move to next chunk
+                    ctx.chunkState = ChunkState.CHUNK_SIZE;
+                    break;
+
+                case CHUNK_TRAILER:
+                    // Read trailer headers until we find \r\n\r\n
+                    // For now, simple implementation: look for blank line
+                    if (b == '\r') {
+                        pos++;
+                        if (pos >= len) {
+                            // Need more data
+                            ctx.rawBytes = new ByteArrayOutputStream();
+                            ctx.rawBytes.write(buffer, pos - 1, len - (pos - 1));
+                            return ChunkParseResult.NEED_MORE_DATA;
+                        }
+                        if (buffer[pos] == '\n') {
+                            pos++;
+                            // Check if this is the blank line (second CRLF)
+                            if (pos >= len) {
+                                // Need more data to check
+                                ctx.rawBytes = new ByteArrayOutputStream();
+                                ctx.rawBytes.write(buffer, pos - 2, len - (pos - 2));
+                                return ChunkParseResult.NEED_MORE_DATA;
+                            }
+                            // Simple trailer handling: just skip until blank line
+                            // Proper implementation would parse trailer headers
+                            ctx.chunkState = ChunkState.CHUNK_DONE;
+                        }
+                    } else {
+                        // Skip trailer header characters
+                        pos++;
+                    }
+                    break;
+
+                case CHUNK_DONE:
+                    // All chunks received
+                    ctx.body = ctx.chunkBodyBuffer.toByteArray();
+                    System.out.println("Chunked body complete: " + ctx.body.length + " bytes");
+                    // Clear buffer
+                    ctx.rawBytes = new ByteArrayOutputStream();
+                    return ChunkParseResult.DONE;
+            }
+        }
+
+        // Processed all available data, clear buffer and wait for more
+        ctx.rawBytes = new ByteArrayOutputStream();
+        return ChunkParseResult.NEED_MORE_DATA;
+    }
+
+    private int findHeaderEnd(byte[] data) {
+        for (int i = 0; i < data.length - 3; i++) {
+            if (data[i] == '\r' && data[i + 1] == '\n' &&
+                    data[i + 2] == '\r' && data[i + 3] == '\n') {
+                return i;
+            }
+        }
+        return -1;
     }
 
     public void write(SelectionKey key) throws IOException {
@@ -178,64 +370,6 @@ public class Server {
         if (!ctx.writeBuffer.hasRemaining()) {
             ctx.state = ConnState.CLOSED;
             client.close();
-        }
-    }
-
-    private boolean readChunkedBody(ConnectionContext ctx) {
-        StringBuilder raw = ctx.raw;
-
-        while (true) {
-            int lineEnd = raw.indexOf("\r\n");
-            if (lineEnd == -1) {
-                return false;
-            }
-
-            String chunkSizeLine = raw.substring(0, lineEnd).trim();
-
-            int chunkSize;
-            try {
-                int semicolon = chunkSizeLine.indexOf(';');
-                if (semicolon != -1) {
-                    chunkSizeLine = chunkSizeLine.substring(0, semicolon);
-                }
-                chunkSize = Integer.parseInt(chunkSizeLine, 16);
-            } catch (NumberFormatException ex) {
-                System.err.println("Invalid chunk size: " + chunkSizeLine);
-                return false;
-            }
-
-            int chunkStart = lineEnd + 2;
-            int chunkEnd = chunkStart + chunkSize;
-            if (raw.length() < chunkEnd + 2) {
-                return false;
-            }
-            if (chunkSize == 0) {
-                if (ctx.chunkBuffer != null) {
-                    ctx.body = ctx.chunkBuffer.toString().getBytes();
-                } else {
-                    ctx.body = new byte[0];
-                }
-                raw.delete(0, chunkEnd + 2);
-                int blankLine = raw.indexOf("\r\n");
-                if (blankLine == -1) {
-                    return false;
-                }
-                System.out.println("Chunked body complete: " + ctx.body.length + " bytes");
-                return true;
-            }
-            String chunkData = raw.substring(chunkStart, chunkEnd);
-            int currentSize = (ctx.chunkBuffer != null ? ctx.chunkBuffer.length() : 0);
-            if (ctx.serverConfig.clientMaxBodySize > 0 &&
-                    currentSize + chunkSize > ctx.serverConfig.clientMaxBodySize) {
-                System.err.println("Chunked body exceeds max size");
-                return false;
-            }
-
-            if (ctx.chunkBuffer == null) {
-                ctx.chunkBuffer = new StringBuilder();
-            }
-            ctx.chunkBuffer.append(chunkData);
-            raw.delete(0, chunkEnd + 2);
         }
     }
 
@@ -295,9 +429,9 @@ public class Server {
 
         HTTPResponse res = new HTTPResponse();
         res.setStatus(400, "Bad Request");
-        res.setBody("Malformed HTTP request"); // setBody() converts to bytes
+        res.setBody("Malformed HTTP request");
         res.addHeader("Content-Type", "text/plain");
-        res.addHeader("Content-Length", String.valueOf(res.getBodyLength())); // getBodyLength() returns bytes.length
+        res.addHeader("Content-Length", String.valueOf(res.getBodyLength()));
         res.addHeader("Connection", "close");
 
         ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
