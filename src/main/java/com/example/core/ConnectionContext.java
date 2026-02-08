@@ -37,6 +37,37 @@ public class ConnectionContext {
     public long connectionStartTime = System.currentTimeMillis();
 
     public Session session;
+
+    /**
+     * Reset context for Keep-Alive connection reuse.
+     * Clears request-specific state while preserving connection-level state.
+     */
+    public void reset() {
+        // Clear buffers
+        readBuffer.clear();
+        writeBuffer = null;
+        rawBytes = null;
+        
+        // Clear request state
+        request = null;
+        state = ConnState.READING_HEADERS;
+        
+        // Clear body state
+        contentLength = 0;
+        body = null;
+        
+        // Clear chunked state
+        isChunked = false;
+        chunkBodyBuffer = null;
+        chunkState = ChunkState.CHUNK_SIZE;
+        chunkSizeLine = new StringBuilder();
+        currentChunkSize = 0;
+        currentChunkBytesRead = 0;
+        
+        // Clear route matching state
+        matchedRoute = null;
+        matchedRoot = null;
+    }
 }
 
 enum ChunkState {

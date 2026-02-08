@@ -38,6 +38,7 @@ run_test "test_cgi.sh"
 run_test "test_chunked_fragmented.sh"
 run_test "test_binary_chunked.sh"
 run_test "test_body_size_limit.sh"
+run_test "test_keepalive.sh"
 
 echo "======================================"
 echo "  Test Summary"

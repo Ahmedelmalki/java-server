@@ -12,8 +12,6 @@ public class Router {
     private final ErrorHandler errorHandler = new ErrorHandler();
 
     public HTTPResponse route(HTTPRequest req, ServerConfig serverConfig, byte[] body) {
-        // System.out.println("req.path: " + req.path);
-
         // ------- SESSION MANAGMENT -------
         String cookieHeader = req.headers.get("Cookie");
         Map<String, String> cookies = Cookie.parseCookieHeader(cookieHeader);
@@ -31,6 +29,7 @@ public class Router {
                 }
             }
         }
+
         HTTPResponse res = new HTTPResponse();
 
         if (matched == null) {
@@ -50,13 +49,22 @@ public class Router {
             res = staticFileHandler.handle(req, matched, session);
         }
 
+        // Add session cookie if needed
         if (!cookies.containsKey("JSESSIONID")) {
             Cookie sessionCookie = sm.createSessionCookie(session);
             res.addCookie(sessionCookie);
             System.out.println("Sending new session cookie: " + session.getSessionId());
         }
-        
+
+        // ===== ADD KEEP-ALIVE HEADERS (AFTER ROUTING) =====
+        if ("keep-alive".equalsIgnoreCase(req.headers.get("Connection"))) {
+            res.addHeader("Connection", "keep-alive");
+            res.addHeader("Keep-Alive", "timeout=30, max=100");
+        } else {
+            res.addHeader("Connection", "close");
+        }
+        // ==================================================
+
         return res;
     }
-
 }

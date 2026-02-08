@@ -88,6 +88,10 @@ public class Server {
         ctx.readBuffer.get(data);
         ctx.readBuffer.clear();
 
+        if (ctx.state == ConnState.READING_HEADERS && ctx.rawBytes == null) {
+            ctx.connectionStartTime = System.currentTimeMillis();
+        }
+
         // Append to raw byte buffer
         if (ctx.rawBytes == null) {
             ctx.rawBytes = new ByteArrayOutputStream();
@@ -362,14 +366,25 @@ public class Server {
         return -1;
     }
 
+    // Server.java - write() method
     public void write(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
         client.write(ctx.writeBuffer);
         if (!ctx.writeBuffer.hasRemaining()) {
-            ctx.state = ConnState.CLOSED;
-            client.close();
+            // Check Connection header
+            String connection = ctx.request.headers.get("Connection");
+
+            if ("keep-alive".equalsIgnoreCase(connection)) {
+                // Reset context for next request
+                ctx.reset();
+                key.interestOps(SelectionKey.OP_READ);
+            } else {
+                // Close connection
+                ctx.state = ConnState.CLOSED;
+                client.close();
+            }
         }
     }
 
