@@ -2,28 +2,37 @@
   "servers": [
     {
       "host": "localhost",
-      "ports": [8080, 8081],
+      "ports": [
+        8080,
+        8081
+      ],
       "serverName": "primary-server",
       "isDefault": true,
       "clientMaxBodySize": 10485760,
       "errorPages": {
-        "400": "error_pages/400.html",
-        "403": "error_pages/403.html",
-        "404": "error_pages/404.html",
-        "405": "error_pages/405.html",
-        "413": "error_pages/413.html",
-        "500": "error_pages/500.html"
+        "400": "src/main/java/com/example/error_pages/400.html",
+        "403": "src/main/java/com/example/error_pages/403.html",
+        "404": "src/main/java/com/example/error_pages/404.html",
+        "405": "src/main/java/com/example/error_pages/405.html",
+        "413": "src/main/java/com/example/error_pages/413.html",
+        "500": "src/main/java/com/example/error_pages/500.html"
       },
       "routes": [
         {
           "path": "/",
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "root": "www",
           "autoindex": true
         },
         {
           "path": "/uploads",
-          "methods": ["GET", "POST", "DELETE"],
+          "methods": [
+            "GET",
+            "POST",
+            "DELETE"
+          ],
           "root": "www/uploads",
           "index": "upload.html",
           "autoindex": true,
@@ -31,7 +40,10 @@
         },
         {
           "path": "/api",
-          "methods": ["GET", "POST"],
+          "methods": [
+            "GET",
+            "POST"
+          ],
           "root": "www/api/cgi-bin",
           "cgi": {
             ".py": "/usr/bin/python3",
@@ -47,7 +59,9 @@
         },
         {
           "path": "/static",
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "root": "www/static",
           "autoindex": true
         }
@@ -56,17 +70,26 @@
     },
     {
       "host": "localhost",
-      "ports": [9090],
+      "ports": [
+        9090
+      ],
       "serverName": "secondary-server",
       "isDefault": false,
       "clientMaxBodySize": 5242880,
       "errorPages": {
-        "404": "error_pages/custom_404.html"
+        "400": "src/main/java/com/example/error_pages/400.html",
+        "403": "src/main/java/com/example/error_pages/403.html",
+        "404": "src/main/java/com/example/error_pages/404.html",
+        "405": "src/main/java/com/example/error_pages/405.html",
+        "413": "src/main/java/com/example/error_pages/413.html",
+        "500": "src/main/java/com/example/error_pages/500.html"
       },
       "routes": [
         {
           "path": "/",
-          "methods": ["GET"],
+          "methods": [
+            "GET"
+          ],
           "root": "www/secondary",
           "index": "home.html",
           "autoindex": false

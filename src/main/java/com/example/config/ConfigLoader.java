@@ -29,6 +29,14 @@ public class ConfigLoader {
                 cfg.clientMaxBodySize = s.optLong("clientMaxBodySize", 5242880);
                 // System.out.println("$$$ timeout : " + cfg.timeout);
 
+                if (s.has("errorPages")) {
+                    cfg.errorPages = new HashMap<>();
+                    JSONObject errorPagesObj = s.getJSONObject("errorPages");
+                    for (String code : errorPagesObj.keySet()) {
+                        cfg.errorPages.put(code, errorPagesObj.getString(code));
+                    }
+                }
+
                 cfg.ports = new ArrayList<>();
                 for (Object p : s.getJSONArray("ports")) {
                     cfg.ports.add(((Number) p).intValue());

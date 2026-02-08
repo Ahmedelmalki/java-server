@@ -33,9 +33,9 @@ public class Router {
         HTTPResponse res = new HTTPResponse();
 
         if (matched == null) {
-            res = errorHandler.handle404(req);
+            res = errorHandler.handle404(req, serverConfig);
         } else if (matched.methods != null && !matched.methods.contains(req.method)) {
-            res = errorHandler.handle405(req);
+            res = errorHandler.handle405(req, serverConfig);
         } else if (matched.redirect != null) {
             res.setStatus(matched.redirect.code, "Redirect");
             res.addHeader("Location", matched.redirect.url);
@@ -49,14 +49,14 @@ public class Router {
             res = staticFileHandler.handle(req, matched, session);
         }
 
-        // Add session cookie if needed
+        // session cookie if needed
         if (!cookies.containsKey("JSESSIONID")) {
             Cookie sessionCookie = sm.createSessionCookie(session);
             res.addCookie(sessionCookie);
             System.out.println("Sending new session cookie: " + session.getSessionId());
         }
 
-        // ===== ADD KEEP-ALIVE HEADERS (AFTER ROUTING) =====
+        // ===== KEEP-ALIVE HEADERS =====
         if ("keep-alive".equalsIgnoreCase(req.headers.get("Connection"))) {
             res.addHeader("Connection", "keep-alive");
             res.addHeader("Keep-Alive", "timeout=30, max=100");
