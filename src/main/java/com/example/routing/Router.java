@@ -4,7 +4,9 @@ import com.example.http.*;
 import com.example.session.*;
 import com.example.config.*;
 import com.example.handlers.*;
+import com.example.parser.MultipartParser; // ADD THIS
 import java.util.Map;
+import java.util.List; // ADD THIS
 
 public class Router {
 
@@ -18,6 +20,23 @@ public class Router {
         SessionManager sm = SessionManager.getInstance();
         Session session = sm.getSession(cookies, true);
         // ------- END SESSION MANAGMENT -------
+
+        // ===== PARSE MULTIPART IF PRESENT ===== ADD THIS BLOCK
+        String contentType = req.headers.get("Content-Type");
+        if (contentType != null && contentType.toLowerCase().startsWith("multipart/form-data")) {
+            String boundary = extractBoundary(contentType);
+            if (boundary != null && body != null && body.length > 0) {
+                try {
+                    MultipartParser parser = new MultipartParser(boundary);
+                    List<MultiPart> parts = parser.parse(body);
+                    req.setParts(parts);
+                    System.out.println("Parsed " + parts.size() + " multipart parts");
+                } catch (Exception e) {
+                    System.err.println("Failed to parse multipart data: " + e.getMessage());
+                }
+            }
+        }
+        // ========================================
 
         RouteConfig matched = null;
         int longestMatch = -1;
@@ -42,7 +61,6 @@ public class Router {
         } else if (matched.cgi != null && !matched.cgi.isEmpty()) {
             res = CGIHandler.handle(req, matched);
         } else if (req.method.equals("DELETE")) {
-            System.out.println("l3adaaaaaaaaaaaaaaaaaaaaaBBB");
             res = Deletehandler.handle(req, matched);
         } else if (matched.uploadEnabled && req.method.equals("POST")) {
             res = UploadHandler.handle(req, matched, body);
@@ -67,5 +85,21 @@ public class Router {
         // ==================================================
 
         return res;
+    }
+
+    // ADD THIS HELPER METHOD
+    private String extractBoundary(String contentType) {
+        for (String param : contentType.split(";")) {
+            param = param.trim();
+            if (param.toLowerCase().startsWith("boundary=")) {
+                String boundary = param.substring(9);
+                // Remove quotes if present
+                if (boundary.startsWith("\"") && boundary.endsWith("\"")) {
+                    boundary = boundary.substring(1, boundary.length() - 1);
+                }
+                return boundary;
+            }
+        }
+        return null;
     }
 }

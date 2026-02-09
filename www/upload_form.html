@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multipart Upload Test</title>
+</head>
+<body>
+    <h1>File Upload Test</h1>
+    
+    <form action="/uploads" method="POST" enctype="multipart/form-data">
+        <label>Name: <input type="text" name="username" value="John Doe"></label><br><br>
+        <label>File 1: <input type="file" name="file1"></label><br><br>
+        <label>File 2: <input type="file" name="file2"></label><br><br>
+        <button type="submit">Upload</button>
+    </form>
+</body>
+</html>

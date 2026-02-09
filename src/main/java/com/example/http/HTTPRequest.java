@@ -3,6 +3,7 @@ package com.example.http;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
 
 public class HTTPRequest {
     public String method;
@@ -10,6 +11,30 @@ public class HTTPRequest {
     public String version;
     public Map<String, String> headers = new HashMap<>();
     public byte[] body = new byte[0]; // Single body field as bytes
+    private List<MultiPart> parts;
+
+    public void setParts(List<MultiPart> parts) {
+        this.parts = parts;
+    }
+
+    public List<MultiPart> getParts() {
+        return parts;
+    }
+
+    public boolean hasMultipartData() {
+        return parts != null && !parts.isEmpty();
+    }
+
+    public MultiPart getPart(String name) {
+        if (parts == null)
+            return null;
+        for (MultiPart part : parts) {
+            if (name.equals(part.getName())) {
+                return part;
+            }
+        }
+        return null;
+    }
 
     /**
      * Parse HTTP request from raw string
@@ -130,7 +155,7 @@ public class HTTPRequest {
     public Map<String, String> getQueryParams() {
         Map<String, String> params = new HashMap<>();
         String query = getQueryString();
-        
+
         if (query.isEmpty()) {
             return params;
         }
@@ -162,15 +187,15 @@ public class HTTPRequest {
      * Check if method is valid
      */
     private static boolean isValidMethod(String method) {
-        return method.equals("GET") || 
-               method.equals("POST") || 
-               method.equals("DELETE") || 
-               method.equals("PUT") || 
-               method.equals("HEAD") || 
-               method.equals("OPTIONS") || 
-               method.equals("PATCH") ||
-               method.equals("TRACE") ||
-               method.equals("CONNECT");
+        return method.equals("GET") ||
+                method.equals("POST") ||
+                method.equals("DELETE") ||
+                method.equals("PUT") ||
+                method.equals("HEAD") ||
+                method.equals("OPTIONS") ||
+                method.equals("PATCH") ||
+                method.equals("TRACE") ||
+                method.equals("CONNECT");
     }
 
     @Override
