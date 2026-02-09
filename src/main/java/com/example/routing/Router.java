@@ -42,6 +42,7 @@ public class Router {
         } else if (matched.cgi != null && !matched.cgi.isEmpty()) {
             res = CGIHandler.handle(req, matched);
         } else if (req.method.equals("DELETE")) {
+            System.out.println("l3adaaaaaaaaaaaaaaaaaaaaaBBB");
             res = Deletehandler.handle(req, matched);
         } else if (matched.uploadEnabled && req.method.equals("POST")) {
             res = UploadHandler.handle(req, matched, body);

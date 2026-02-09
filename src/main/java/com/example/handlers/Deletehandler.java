@@ -13,6 +13,8 @@ public class Deletehandler {
         HTTPResponse res = new HTTPResponse();
 
         try {
+            System.out.println("wa l3adaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab");
+
             if (matched.methods == null || !matched.methods.contains("DELETE")) {
                 res.setStatus(405, "Method Not Allowed");
                 res.setBody("DELETE not allowed on this route");

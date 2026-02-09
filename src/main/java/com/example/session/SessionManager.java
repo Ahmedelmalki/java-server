@@ -12,7 +12,7 @@ public class SessionManager {
     private long lastCleanupTime;
 
     private SessionManager() {
-        System.out.println("@@@ entered SessionManager()");
+        // System.out.println("@@@ entered SessionManager()");
         this.sessions = new ConcurrentHashMap<>();
         this.defaultMaxInactiveInterval = 1800;
         this.lastCleanupTime = System.currentTimeMillis();
@@ -53,7 +53,7 @@ public class SessionManager {
         Session session = Session.create();
         session.setMaxInactiveInterval(defaultMaxInactiveInterval);
         sessions.put(session.getSessionId(), session);
-        System.out.println("Created new session: " + session.getSessionId());
+        // System.out.println("Created new session: " + session.getSessionId());
         return session;
     }
 
@@ -68,7 +68,7 @@ public class SessionManager {
 
     public void removeSession(String sessionId) {
         sessions.remove(sessionId);
-        System.out.println("Removed session: " + sessionId);
+        // System.out.println("Removed session: " + sessionId);
     }
 
     public void invalidateSession(String sessionId) {

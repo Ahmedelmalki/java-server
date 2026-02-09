@@ -3,14 +3,17 @@
 
 echo "=== Test: DELETE Method ==="
 
-# First create a file
+# First create a file - use mkdir -p to ensure directory exists
 echo "Creating test file..."
+mkdir -p www/uploads  # ADD THIS LINE
 echo "test content" > www/uploads/test_delete.txt
 
 if [ -f "www/uploads/test_delete.txt" ]; then
     echo "✓ Test file created"
 else
     echo "✗ Failed to create test file"
+    echo "Current directory: $(pwd)"  # ADD THIS for debugging
+    echo "Trying to create in: $(pwd)/www/uploads/"  # ADD THIS
     exit 1
 fi
 
