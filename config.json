@@ -89,7 +89,7 @@
           "methods": [
             "GET"
           ],
-          "root": "www/secondary",
+          "root": "www/",
           "index": "home.html",
           "autoindex": false
         }
