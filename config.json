@@ -4,7 +4,8 @@
       "host": "localhost",
       "ports": [
         8080,
-        8081
+        8081,
+        8082
       ],
       "serverName": "primary-server",
       "isDefault": true,
