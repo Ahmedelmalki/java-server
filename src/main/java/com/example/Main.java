@@ -13,13 +13,18 @@ public class Main {
 
         List<ServerConfig> servers = ConfigLoader.load("config.json");
 
-        ServerConfig active = servers.stream()
-                .filter(s -> s.isDefault)
-                .findFirst()
-                .orElseThrow();
+        // ServerConfig active = servers.stream()
+        // .filter(s -> s.isDefault)
+        // .findFirst()
+        // .orElseThrow();
+
+        if (servers.isEmpty()) {
+            System.err.println("No server configurations found!");
+            return;
+        }
 
         try {
-            new Server(active).start();
+            new Server(servers).start();
         } catch (IOException ex) {
             System.out.println("oh no: " + ex.getMessage());
         }

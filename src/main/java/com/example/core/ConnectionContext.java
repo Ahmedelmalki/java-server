@@ -15,6 +15,7 @@ public class ConnectionContext {
     public ConnState state = ConnState.READING_HEADERS;
 
     public ServerConfig serverConfig;
+    public int localPort;
     public RouteConfig matchedRoute;
     public String matchedRoot; 
 

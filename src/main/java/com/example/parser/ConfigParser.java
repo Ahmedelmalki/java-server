@@ -39,6 +39,7 @@ public class ConfigParser {
         ServerConfig config = new ServerConfig();
         
         config.host = (String) obj.get("host");
+        config.serverName = (String) obj.getOrDefault("serverName", null);
         config.isDefault = (Boolean) obj.get("isDefault");
         config.timeout = getLong(obj, "timeout", 30000L);
         config.clientMaxBodySize = getLong(obj, "clientMaxBodySize", 5242880L);

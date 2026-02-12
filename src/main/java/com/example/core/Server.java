@@ -1,40 +1,56 @@
 package com.example.core;
 
-import java.io.ByteArrayOutputStream;
+import com.example.config.ServerConfig;
+import com.example.http.HTTPRequest;
+import com.example.http.HTTPResponse;
+import com.example.routing.Router;
+import com.example.session.SessionManager;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
-import java.util.*;
-import com.example.config.*;
-import com.example.http.*;
-import com.example.routing.*;
-import com.example.session.SessionManager;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 public class Server {
 
-    private final ServerConfig config;
+    private final List<ServerConfig> serverConfigs;
+    private final Map<Integer, List<ServerConfig>> configsByPort;
     private final Router router = new Router();
 
-    public Server(ServerConfig config) {
-        this.config = config;
+    public Server(List<ServerConfig> serverConfigs) {
+        if (serverConfigs == null || serverConfigs.isEmpty()) {
+            throw new IllegalArgumentException("At least one server configuration is required");
+        }
+        this.serverConfigs = List.copyOf(serverConfigs);
+        this.configsByPort = buildConfigsByPort(this.serverConfigs);
     }
 
     public void start() throws IOException {
         Selector selector = Selector.open();
 
-        for (int port : config.ports) {
+        for (int port : configsByPort.keySet()) {
             ServerSocketChannel server = ServerSocketChannel.open();
             server.configureBlocking(false);
             server.bind(new InetSocketAddress(port));
-            server.register(selector, SelectionKey.OP_ACCEPT, config);
+            server.register(selector, SelectionKey.OP_ACCEPT, port);
             System.out.println("Listening on port: " + port);
         }
 
         while (true) {
             selector.select(1000);
 
-            // Cleanup sessions and timeouts in the main event loop
             checkTimeouts(selector);
             SessionManager.getInstance().cleanupExpiredSessions();
 
@@ -58,14 +74,18 @@ public class Server {
 
     public void accept(Selector selector, SelectionKey key) throws IOException {
         ServerSocketChannel server = (ServerSocketChannel) key.channel();
-
-        ServerConfig serverConfig = (ServerConfig) key.attachment();
+        Integer port = (Integer) key.attachment();
 
         SocketChannel client = server.accept();
+        if (client == null) {
+            return;
+        }
+
         client.configureBlocking(false);
 
         ConnectionContext ctx = new ConnectionContext();
-        ctx.serverConfig = serverConfig;
+        ctx.localPort = port;
+        ctx.serverConfig = getDefaultServerForPort(port);
 
         client.register(selector, SelectionKey.OP_READ, ctx);
         System.out.println("Accepted " + client.getRemoteAddress());
@@ -84,13 +104,11 @@ public class Server {
 
         ctx.readBuffer.flip();
 
-        // READING HEADERS
         if (ctx.state == ConnState.READING_HEADERS) {
             while (ctx.readBuffer.hasRemaining()) {
                 char c = (char) ctx.readBuffer.get();
                 ctx.headerBuffer.append(c);
 
-                // Check for end of headers (\r\n\r\n)
                 if (ctx.headerBuffer.toString().endsWith("\r\n\r\n")) {
                     String headerPart = ctx.headerBuffer.toString();
                     ctx.request = HTTPRequest.parse(headerPart);
@@ -100,13 +118,14 @@ public class Server {
                         return;
                     }
 
-                    // Prepare body reader
+                    ctx.serverConfig = resolveServerConfig(ctx.request, ctx.localPort);
+
                     String transferEncoding = ctx.request.headers.get("Transfer-Encoding");
                     String contentLength = ctx.request.headers.get("Content-Length");
 
                     long maxBodySize = ctx.serverConfig.clientMaxBodySize;
 
-                    if (transferEncoding != null && transferEncoding.toLowerCase().contains("chunked")) {
+                    if (transferEncoding != null && transferEncoding.toLowerCase(Locale.ROOT).contains("chunked")) {
                         ctx.bodyReader = new com.example.parser.ChunkedBodyReader(maxBodySize);
                         ctx.state = ConnState.READING_BODY;
                     } else if (contentLength != null) {
@@ -131,7 +150,6 @@ public class Server {
             }
         }
 
-        // READING BODY
         if (ctx.state == ConnState.READING_BODY) {
             try {
                 if (ctx.bodyReader.process(ctx.readBuffer)) {
@@ -149,7 +167,6 @@ public class Server {
             }
         }
 
-        // PROCESS REQUEST
         if (ctx.state == ConnState.PROCESSING) {
             HTTPResponse res = router.route(ctx.request, ctx.serverConfig, ctx.request.getBodyBytes());
             ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
@@ -160,22 +177,18 @@ public class Server {
         ctx.readBuffer.clear();
     }
 
-    // Server.java - write() method
     public void write(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
         client.write(ctx.writeBuffer);
         if (!ctx.writeBuffer.hasRemaining()) {
-            // Check Connection header
             String connection = ctx.request.headers.get("Connection");
 
             if ("keep-alive".equalsIgnoreCase(connection)) {
-                // Reset context for next request
                 ctx.reset();
                 key.interestOps(SelectionKey.OP_READ);
             } else {
-                // Close connection
                 ctx.state = ConnState.CLOSED;
                 client.close();
             }
@@ -187,14 +200,15 @@ public class Server {
 
         for (SelectionKey key : selector.keys()) {
             if (key.channel() instanceof ServerSocketChannel) {
-                continue; // skip server socket channel
+                continue;
             }
 
             if (key.attachment() instanceof ConnectionContext) {
                 ConnectionContext ctx = (ConnectionContext) key.attachment();
                 long elapsed = currentTime - ctx.connectionStartTime;
+                long timeout = ctx.serverConfig != null ? ctx.serverConfig.timeout : 30000L;
 
-                if (elapsed > ctx.serverConfig.timeout) {
+                if (elapsed > timeout) {
                     System.out.println("Connection timed out after " + elapsed + "ms");
 
                     try {
@@ -211,6 +225,95 @@ public class Server {
                 }
             }
         }
+    }
+
+    private Map<Integer, List<ServerConfig>> buildConfigsByPort(List<ServerConfig> configs) {
+        Map<Integer, List<ServerConfig>> byPort = new LinkedHashMap<>();
+
+        for (ServerConfig config : configs) {
+            Set<Integer> seenInConfig = new HashSet<>();
+            for (int port : config.ports) {
+                if (!seenInConfig.add(port)) {
+                    throw new IllegalArgumentException("Duplicate port " + port + " in one server block");
+                }
+                byPort.computeIfAbsent(port, p -> new ArrayList<>()).add(config);
+            }
+        }
+
+        return byPort;
+    }
+
+    private ServerConfig getDefaultServerForPort(int port) {
+        List<ServerConfig> candidates = configsByPort.get(port);
+        if (candidates == null || candidates.isEmpty()) {
+            return serverConfigs.get(0);
+        }
+
+        for (ServerConfig config : candidates) {
+            if (config.isDefault) {
+                return config;
+            }
+        }
+
+        return candidates.get(0);
+    }
+
+    private ServerConfig resolveServerConfig(HTTPRequest request, int port) {
+        List<ServerConfig> candidates = configsByPort.get(port);
+        if (candidates == null || candidates.isEmpty()) {
+            return serverConfigs.get(0);
+        }
+
+        String hostHeader = request.headers.get("Host");
+        String normalizedHost = extractHostName(hostHeader);
+
+        if (!normalizedHost.isEmpty()) {
+            for (ServerConfig config : candidates) {
+                if (hostMatches(normalizedHost, config.serverName)) {
+                    return config;
+                }
+            }
+            for (ServerConfig config : candidates) {
+                if (hostMatches(normalizedHost, config.host)) {
+                    return config;
+                }
+            }
+        }
+
+        return getDefaultServerForPort(port);
+    }
+
+    private String extractHostName(String hostHeader) {
+        if (hostHeader == null) {
+            return "";
+        }
+
+        String value = hostHeader.trim();
+        if (value.isEmpty()) {
+            return "";
+        }
+
+        if (value.startsWith("[")) {
+            int closing = value.indexOf(']');
+            if (closing > 1) {
+                return value.substring(1, closing).toLowerCase(Locale.ROOT);
+            }
+            return value.toLowerCase(Locale.ROOT);
+        }
+
+        int colon = value.indexOf(':');
+        if (colon >= 0) {
+            return value.substring(0, colon).trim().toLowerCase(Locale.ROOT);
+        }
+
+        return value.toLowerCase(Locale.ROOT);
+    }
+
+    private boolean hostMatches(String requestHost, String configuredHost) {
+        if (configuredHost == null) {
+            return false;
+        }
+        return Objects.equals(requestHost, configuredHost.trim().toLowerCase(Locale.ROOT));
     }
 
     private void sendTimeoutResponse(SelectionKey key) throws IOException {

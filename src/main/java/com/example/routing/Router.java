@@ -4,9 +4,9 @@ import com.example.http.*;
 import com.example.session.*;
 import com.example.config.*;
 import com.example.handlers.*;
-import com.example.parser.MultipartParser; // ADD THIS
+import com.example.parser.MultipartParser; 
 import java.util.Map;
-import java.util.List; // ADD THIS
+import java.util.List; 
 
 public class Router {
 
@@ -21,7 +21,7 @@ public class Router {
         Session session = sm.getSession(cookies, true);
         // ------- END SESSION MANAGMENT -------
 
-        // ===== PARSE MULTIPART IF PRESENT ===== ADD THIS BLOCK
+        // ===== PARSE MULTIPART IF PRESENT =====  
         String contentType = req.headers.get("Content-Type");
         if (contentType != null && contentType.toLowerCase().startsWith("multipart/form-data")) {
             String boundary = extractBoundary(contentType);
@@ -87,7 +87,7 @@ public class Router {
         return res;
     }
 
-    // ADD THIS HELPER METHOD
+    //  HELPER METHOD
     private String extractBoundary(String contentType) {
         for (String param : contentType.split(";")) {
             param = param.trim();

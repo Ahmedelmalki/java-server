@@ -5,6 +5,7 @@ import java.util.Map;
 
 public class ServerConfig {
     public String host;
+    public String serverName;
     public List<Integer> ports;
     public boolean isDefault;
     public List<RouteConfig> routes;

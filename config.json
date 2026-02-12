@@ -3,9 +3,7 @@
     {
       "host": "localhost",
       "ports": [
-        8080,
-        8081,
-        8082
+        8080
       ],
       "serverName": "primary-server",
       "isDefault": true,
@@ -70,9 +68,9 @@
       "timeout": 30000
     },
     {
-      "host": "localhost",
+      "host": "mohsindev",
       "ports": [
-        9090
+        8080
       ],
       "serverName": "secondary-server",
       "isDefault": false,
