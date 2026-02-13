@@ -1,11 +1,14 @@
 package com.example.handlers;
 
-import com.example.http.*;
-import com.example.config.RouteConfig;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Map;
+
+import com.example.config.RouteConfig;
+import com.example.http.HTTPRequest;
+import com.example.http.HTTPResponse;
 
 public class CGIHandler {
 
@@ -60,11 +63,14 @@ public class CGIHandler {
     }
 
     private static String resolveScriptPath(HTTPRequest req, RouteConfig route) {
-        String rel = req.path.substring(route.path.length());
+
+        String pathOnly = req.path.contains("?") ? req.path.substring(0, req.path.indexOf("?")) : req.path;
+        String rel = pathOnly.substring(route.path.length());
+
         if (rel.isEmpty() || rel.equals("/")) {
             throw new RuntimeException("No CGI script specified");
         }
-        return route.root + rel;
+        return Path.of(route.root, rel).toAbsolutePath().toString();
     }
 
     private static String resolveInterpreter(String scriptPath, RouteConfig route) {

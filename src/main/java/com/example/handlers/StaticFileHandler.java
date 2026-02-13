@@ -1,12 +1,14 @@
 package com.example.handlers;
 
-import com.example.config.RouteConfig;
-import com.example.http.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
-import com.example.session.*;
+
+import com.example.config.RouteConfig;
+import com.example.http.HTTPRequest;
+import com.example.http.HTTPResponse;
+import com.example.session.Session;
 
 public class StaticFileHandler {
 
@@ -19,15 +21,9 @@ public class StaticFileHandler {
             }
 
             String relPath = req.path.substring(route.path.length());
-            if (relPath.isEmpty() || relPath.equals("/")) {
-                relPath = "/" + (route.index != null ? route.index : "index.html");
-            }
 
             Path root = Path.of(route.root).toAbsolutePath().normalize();
             Path file = root.resolve(relPath.startsWith("/") ? relPath.substring(1) : relPath).normalize();
-
-            // System.out.println("==========\n real path: " + relPath + "\nfile: " +
-            // file.toString());
 
             // Directory traversal protection
             if (!file.startsWith(root)) {
@@ -43,18 +39,15 @@ public class StaticFileHandler {
             }
 
             if (Files.isDirectory(file)) {
-                if (route.index != null) {
-                    Path index = file.resolve(route.index);
-                    if (Files.exists(index)) {
-                        file = index;
-                    } else if (route.autoindex) {
-                        return generateDirectoryListing(file, root, req.path, route);
-                    } else {
-                        res.setStatus(403, "Forbidden");
-                        res.setBody("Directory listing disabled");
-                        return res;
-                    }
+                // check for index file
+                String indexFileName = (route.index != null) ? route.index : "index.html";
+                Path indexFile = file.resolve(indexFileName);
+
+                if (Files.exists(indexFile) && !Files.isDirectory(indexFile)) {
+                    //index exist
+                    file = indexFile;
                 } else if (route.autoindex) {
+                    //autoindex on but no index file
                     return generateDirectoryListing(file, root, req.path, route);
                 } else {
                     res.setStatus(403, "Forbidden");
@@ -63,8 +56,9 @@ public class StaticFileHandler {
                 }
             }
 
-            byte[] content = Files.readAllBytes(file);
+ 
 
+            byte[] content = Files.readAllBytes(file);
             res.setStatus(200, "OK");
             res.setBodyBytes(content);
             res.addHeader("Content-Type", guessContentType(file));

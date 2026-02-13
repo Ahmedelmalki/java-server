@@ -202,13 +202,6 @@ public class Server {
                 ctx.reset();
                 key.interestOps(SelectionKey.OP_READ);
             }
-                                                                                                    // String connection = ctx.request.headers.get("Connection");
-
-            // if ("keep-alive".equalsIgnoreCase(connection)) {
-            // } else {
-            // ctx.state = ConnState.CLOSED;
-            // client.close();
-            // }
         }
     }
 

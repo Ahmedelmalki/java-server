@@ -63,11 +63,13 @@ public class Router {
 
         if (matched == null) {
             res = errorHandler.handle404(req, serverConfig);
-        } else if (matched.methods != null && !matched.methods.contains(req.method)) {
-            res = errorHandler.handle405(req, serverConfig);
-        } else if (matched.redirect != null) {
+        }
+        // redirect
+         else if (matched.redirect != null) {
             res.setStatus(matched.redirect.code, "Redirect");
             res.addHeader("Location", matched.redirect.url);
+        } else if (matched.methods != null && !matched.methods.contains(req.method)) {
+            res = errorHandler.handle405(req, serverConfig);
         } else if (matched.cgi != null && !matched.cgi.isEmpty()) {
             res = CGIHandler.handle(req, matched);
         } else if (req.method.equals("DELETE")) {
