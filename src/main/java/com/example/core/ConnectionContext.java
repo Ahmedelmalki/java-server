@@ -1,11 +1,12 @@
 package com.example.core;
 
-import com.example.http.HTTPRequest;
-import com.example.session.Session;
+import java.nio.ByteBuffer;
+
 import com.example.config.RouteConfig;
 import com.example.config.ServerConfig;
-import com.example.parser.BodyReader; 
-import java.nio.ByteBuffer;
+import com.example.http.HTTPRequest;
+import com.example.parser.BodyReader;
+import com.example.session.Session;
 
 public class ConnectionContext {
     public ByteBuffer readBuffer = ByteBuffer.allocate(8192);

@@ -1,12 +1,22 @@
 package com.example.routing;
 
-import com.example.http.*;
-import com.example.session.*;
-import com.example.config.*;
-import com.example.handlers.*;
-import com.example.parser.MultipartParser; 
+import java.util.List;
 import java.util.Map;
-import java.util.List; 
+
+import com.example.config.RouteConfig;
+import com.example.config.ServerConfig;
+import com.example.handlers.CGIHandler;
+import com.example.handlers.Deletehandler;
+import com.example.handlers.ErrorHandler;
+import com.example.handlers.StaticFileHandler;
+import com.example.handlers.UploadHandler;
+import com.example.http.HTTPRequest;
+import com.example.http.HTTPResponse;
+import com.example.http.MultiPart;
+import com.example.parser.MultipartParser;
+import com.example.session.Cookie;
+import com.example.session.Session;
+import com.example.session.SessionManager;
 
 public class Router {
 
@@ -21,7 +31,7 @@ public class Router {
         Session session = sm.getSession(cookies, true);
         // ------- END SESSION MANAGMENT -------
 
-        // ===== PARSE MULTIPART IF PRESENT =====  
+        // ===== PARSE MULTIPART IF PRESENT =====
         String contentType = req.headers.get("Content-Type");
         if (contentType != null && contentType.toLowerCase().startsWith("multipart/form-data")) {
             String boundary = extractBoundary(contentType);
@@ -66,6 +76,9 @@ public class Router {
             res = UploadHandler.handle(req, matched, body);
         } else {
             res = staticFileHandler.handle(req, matched, session);
+            if (res.getStatusCode() == 404  ) {
+                res = errorHandler.handle404(req, serverConfig);
+            }
         }
 
         // session cookie if needed
@@ -75,11 +88,12 @@ public class Router {
             System.out.println("Sending new session cookie: " + session.getSessionId());
         }
 
-        // ===== KEEP-ALIVE HEADERS =====
-        if ("keep-alive".equalsIgnoreCase(req.headers.get("Connection"))) {
+        // ===== KEEP-ALIVE HEADERS if status is success=====
+        if (res.getStatusCode() < 400 && "keep-alive".equalsIgnoreCase(req.headers.get("Connection"))) {
             res.addHeader("Connection", "keep-alive");
             res.addHeader("Keep-Alive", "timeout=30, max=100");
         } else {
+            //in case of err 4.. 5.
             res.addHeader("Connection", "close");
         }
         // ==================================================
@@ -87,7 +101,7 @@ public class Router {
         return res;
     }
 
-    //  HELPER METHOD
+    // HELPER METHOD
     private String extractBoundary(String contentType) {
         for (String param : contentType.split(";")) {
             param = param.trim();

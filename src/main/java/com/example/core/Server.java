@@ -1,11 +1,5 @@
 package com.example.core;
 
-import com.example.config.ServerConfig;
-import com.example.http.HTTPRequest;
-import com.example.http.HTTPResponse;
-import com.example.routing.Router;
-import com.example.session.SessionManager;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -14,14 +8,21 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
+import com.example.config.ServerConfig;
+import com.example.handlers.ErrorHandler;
+import com.example.http.HTTPRequest;
+import com.example.http.HTTPResponse;
+import com.example.routing.Router;
+import com.example.session.SessionManager;
 
 public class Server {
 
@@ -172,6 +173,10 @@ public class Server {
             ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
             ctx.state = ConnState.WRITING_RESPONSE;
             key.interestOps(SelectionKey.OP_WRITE);
+
+            if (res.getStatusCode() >= 400) {
+                res.addHeader("Connection", "close"); // force close
+            }
         }
 
         ctx.readBuffer.clear();
@@ -180,18 +185,30 @@ public class Server {
     public void write(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
+        if (ctx.writeBuffer == null) {
+            return;
+        }
 
         client.write(ctx.writeBuffer);
-        if (!ctx.writeBuffer.hasRemaining()) {
-            String connection = ctx.request.headers.get("Connection");
 
-            if ("keep-alive".equalsIgnoreCase(connection)) {
+        if (!ctx.writeBuffer.hasRemaining()) {
+            String resStart = new String(ctx.writeBuffer.array(), 0, 15);
+            boolean isErr = resStart.contains(" 4") || resStart.contains(" 5");
+
+            if (isErr || "close".equalsIgnoreCase(ctx.request.headers.get("Connection"))) {
+                client.close();
+                key.cancel();
+            } else {
                 ctx.reset();
                 key.interestOps(SelectionKey.OP_READ);
-            } else {
-                ctx.state = ConnState.CLOSED;
-                client.close();
             }
+                                                                                                    // String connection = ctx.request.headers.get("Connection");
+
+            // if ("keep-alive".equalsIgnoreCase(connection)) {
+            // } else {
+            // ctx.state = ConnState.CLOSED;
+            // client.close();
+            // }
         }
     }
 
@@ -320,12 +337,14 @@ public class Server {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
-        HTTPResponse res = new HTTPResponse();
-        res.setStatus(408, "Request Timeout");
-        res.setBody("Request Timeout");
-        res.addHeader("Content-Type", "text/plain");
-        res.addHeader("Content-Length", String.valueOf(res.getBody().length()));
-        res.addHeader("Connection", "close");
+        if (ctx.state == ConnState.CLOSED || ctx.writeBuffer != null) {
+            client.close();
+            key.cancel();
+            return;
+        }
+
+        ErrorHandler errorHandler = new ErrorHandler();
+        HTTPResponse res = errorHandler.handle408(ctx.request, ctx.serverConfig);
 
         ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
         ctx.state = ConnState.WRITING_RESPONSE;
@@ -339,12 +358,13 @@ public class Server {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
-        HTTPResponse res = new HTTPResponse();
-        res.setStatus(400, "Bad Request");
-        res.setBody("Malformed HTTP request");
-        res.addHeader("Content-Type", "text/plain");
-        res.addHeader("Content-Length", String.valueOf(res.getBodyLength()));
-        res.addHeader("Connection", "close");
+        ErrorHandler errorHandler = new ErrorHandler();
+        HTTPResponse res = errorHandler.handle400(ctx.request, ctx.serverConfig);
+        // res.setStatus(400, "Bad Request");
+        // res.setBody("Malformed HTTP request");
+        // res.addHeader("Content-Type", "text/plain");
+        // res.addHeader("Content-Length", String.valueOf(res.getBodyLength()));
+        // res.addHeader("Connection", "close");
 
         ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
         ctx.state = ConnState.WRITING_RESPONSE;
@@ -358,12 +378,9 @@ public class Server {
         SocketChannel client = (SocketChannel) key.channel();
         ConnectionContext ctx = (ConnectionContext) key.attachment();
 
-        HTTPResponse res = new HTTPResponse();
-        res.setStatus(413, "Payload Too Large");
-        res.setBody("Request body exceeds maximum allowed size");
-        res.addHeader("Content-Type", "text/plain");
-        res.addHeader("Content-Length", String.valueOf(res.getBodyLength()));
-        res.addHeader("Connection", "close");
+        ErrorHandler errorHandler = new ErrorHandler();
+        HTTPResponse res = errorHandler.handle413(ctx.request, ctx.serverConfig);
+        // res.addHeader("Connection", "close");
 
         ctx.writeBuffer = ByteBuffer.wrap(res.toBytes());
         ctx.state = ConnState.WRITING_RESPONSE;

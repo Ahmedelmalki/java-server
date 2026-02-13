@@ -1,12 +1,12 @@
 package com.example.http;
 
-import java.util.Map;
-import com.example.session.Cookie;
-
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import com.example.session.Cookie;
 
 public class HTTPResponse {
     private String version = "HTTP/1.1";
@@ -31,6 +31,10 @@ public class HTTPResponse {
     public void setStatus(int code, String message) {
         this.statusCode = code;
         this.statusMessage = message;
+    }
+
+    public int getStatusCode() {
+        return this.statusCode;
     }
 
     public void addHeader(String k, String v) {

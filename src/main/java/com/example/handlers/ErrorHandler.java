@@ -1,11 +1,12 @@
 package com.example.handlers;
 
-import com.example.http.HTTPRequest;
-import com.example.http.HTTPResponse;
-import com.example.config.ServerConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import com.example.config.ServerConfig;
+import com.example.http.HTTPRequest;
+import com.example.http.HTTPResponse;
 
 public class ErrorHandler {
 
@@ -33,44 +34,51 @@ public class ErrorHandler {
         return loadErrorPage(413, "Payload Too Large", config);
     }
 
+    public HTTPResponse handle408(HTTPRequest req, ServerConfig config) {
+        return loadErrorPage(408, "request timeout", config);
+    }
+
     /**
      * Load error page from config or use default message
      */
     private HTTPResponse loadErrorPage(int statusCode, String statusMessage, ServerConfig config) {
         HTTPResponse res = new HTTPResponse();
         res.setStatus(statusCode, statusMessage);
+        res.addHeader("Content-Type", "text/html; charset=utf-8");
+        res.addHeader("Connection", "close"); // force close
 
-        // Try to load custom error page from config
-        String errorPagePath = null;
-        if (config.errorPages != null) {
-            errorPagePath = config.errorPages.get(String.valueOf(statusCode));
-        }
+        // load custom error page from config
+        String errorPagePath = (config != null && config.errorPages != null) ?
+         config.errorPages.get(String.valueOf(statusCode)) : null;
+
+        // if (config != null && config.errorPages != null) {
+        //     errorPagePath = config.errorPages.get(String.valueOf(statusCode));
+        // }
 
         if (errorPagePath != null) {
             Path file = Path.of(errorPagePath);
-
             if (Files.exists(file)) {
                 try {
-                    String content = Files.readString(file);
-                    res.setBody(content);
-                    res.addHeader("Content-Type", "text/html; charset=utf-8");
-                    res.addHeader("Content-Length", String.valueOf(res.getBodyLength()));
+                    byte[] content = Files.readAllBytes(file);
+                    res.setBodyBytes(content);
+                    res.addHeader("Content-Length", String.valueOf(content.length));
                     return res;
                 } catch (IOException ex) {
                     System.err.println("Failed to read error page: " + errorPagePath);
-                    // Fall through to default error message
                 }
             } else {
                 System.err.println("Error page not found: " + errorPagePath);
-                // Fall through to default error message
             }
         }
 
         // Default error message (plain text)
-        res.setBody(statusCode + " " + statusMessage);
-        res.addHeader("Content-Type", "text/plain");
-        res.addHeader("Content-Length", String.valueOf(res.getBodyLength()));
+        String defaultHtml = "<html><head><title>Error " + statusCode + "</title></head>" +
+                "<body><h1>" + statusCode + "</h1>" +
+                "    <p>" + statusMessage + "</p>" +
+                "</body></html>";
 
+        res.setBody(defaultHtml);
+        res.addHeader("Content-Length", String.valueOf(res.getBodyLength()));
         return res;
     }
 }
