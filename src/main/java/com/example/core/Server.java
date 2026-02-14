@@ -5,23 +5,12 @@ import com.example.http.HTTPRequest;
 import com.example.http.HTTPResponse;
 import com.example.routing.Router;
 import com.example.session.SessionManager;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.nio.channels.*;
+import java.util.*;
+
 
 public class Server {
 
@@ -195,6 +184,8 @@ public class Server {
         }
     }
 
+
+    // ========= HELPER METHODS ========= 
     private void checkTimeouts(Selector selector) {
         long currentTime = System.currentTimeMillis();
 

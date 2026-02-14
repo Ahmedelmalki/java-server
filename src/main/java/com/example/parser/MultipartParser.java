@@ -2,10 +2,7 @@ package com.example.parser;
 
 import com.example.http.MultiPart;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class MultipartParser {
 
@@ -19,9 +16,9 @@ public class MultipartParser {
         List<MultiPart> parts = new ArrayList<>();
         String boundaryMarker = "--" + boundary;
         byte[] boundaryBytes = boundaryMarker.getBytes(StandardCharsets.US_ASCII);
-        
+
         List<Integer> boundaryPositions = new ArrayList<>();
-        
+
         // Find all boundary positions
         for (int i = 0; i < body.length - boundaryBytes.length + 1; i++) {
             boolean match = true;
@@ -36,7 +33,7 @@ public class MultipartParser {
                 i += boundaryBytes.length - 1;
             }
         }
-        
+
         if (boundaryPositions.size() < 2) {
             return parts; // No valid multipart data
         }
@@ -45,7 +42,7 @@ public class MultipartParser {
         for (int i = 0; i < boundaryPositions.size() - 1; i++) {
             int start = boundaryPositions.get(i) + boundaryBytes.length;
             int end = boundaryPositions.get(i + 1);
-            
+
             // Check for CRLF after boundary
             if (start + 2 <= body.length && body[start] == '\r' && body[start + 1] == '\n') {
                 start += 2;
@@ -57,14 +54,15 @@ public class MultipartParser {
             if (end - 2 >= start && body[end - 2] == '\r' && body[end - 1] == '\n') {
                 end -= 2;
             }
-            
-            if (end <= start) continue;
+
+            if (end <= start)
+                continue;
 
             // Find headers/body split (\r\n\r\n)
             int split = -1;
             for (int k = start; k < end - 3; k++) {
-                if (body[k] == '\r' && body[k + 1] == '\n' && 
-                    body[k + 2] == '\r' && body[k + 3] == '\n') {
+                if (body[k] == '\r' && body[k + 1] == '\n' &&
+                        body[k + 2] == '\r' && body[k + 3] == '\n') {
                     split = k;
                     break;
                 }
@@ -74,18 +72,18 @@ public class MultipartParser {
                 // Parse headers
                 String headerStr = new String(body, start, split - start, StandardCharsets.US_ASCII);
                 Map<String, String> headers = parseHeaders(headerStr);
-                
+
                 // Extract body
                 int bodyStart = split + 4;
                 int bodyLen = end - bodyStart;
                 byte[] partBody = new byte[bodyLen];
                 System.arraycopy(body, bodyStart, partBody, 0, bodyLen);
-                
+
                 // Extract name and filename from Content-Disposition
                 String contentDisposition = headers.get("content-disposition");
                 String name = null;
                 String filename = null;
-                
+
                 if (contentDisposition != null) {
                     for (String param : contentDisposition.split(";")) {
                         param = param.trim();
@@ -96,7 +94,7 @@ public class MultipartParser {
                         }
                     }
                 }
-                
+
                 parts.add(new MultiPart(name, filename, headers, partBody));
             }
         }
@@ -104,6 +102,7 @@ public class MultipartParser {
         return parts;
     }
 
+    // ========= HELPER METHODS =========
     private Map<String, String> parseHeaders(String headerStr) {
         Map<String, String> headers = new HashMap<>();
         for (String line : headerStr.split("\r\n")) {
@@ -114,9 +113,10 @@ public class MultipartParser {
                 headers.put(key, value);
             }
         }
+        System.out.println("headers : " + headers.toString());
         return headers;
     }
-    
+
     private String unquote(String val) {
         if (val.startsWith("\"") && val.endsWith("\"")) {
             return val.substring(1, val.length() - 1);
