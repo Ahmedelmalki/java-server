@@ -1,0 +1,42 @@
+curl -H "Host: localhost" http://localhost:8080/
+curl -H "Host: mohsindev" http://localhost:8080/
+
+// port conflict
+python3 -m http.server 8080
+
+
+// 405 not allowed
+curl -X DELETE http://localhost:8080/
+
+// 301 redirect
+curl -v http://localhost:8080/redirect
+
+
+// 404 notofound
+curl http://localhost:8080/non-existent-page
+
+
+// CGI
+//GET w Query
+curl "http://localhost:8080/api/hello.py?name=gemini&status=active"
+
+// ".js": "/usr/bin/node"
+
+curl http://localhost:8080/api/test.js
+
+//POST w Headers
+curl -X POST -d "some body data" -H "User-Agent: MyTestAgent" http://localhost:8080/api/hello.py
+
+
+//413 Payload Too Large
+
+dd if=/dev/zero of=largefile bs=1M count=11
+curl -X POST --data-binary @largefile http://localhost:8080/uploads
+
+
+// delete
+curl -X DELETE http://localhost:8080/uploads/delete_me.txt
+
+
+//Upload
+curl -v -F "myFile=@test.txt" http://localhost:8080/uploads
