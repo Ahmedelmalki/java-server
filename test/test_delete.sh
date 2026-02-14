@@ -1,42 +1,59 @@
-#!/bin/bash
-# Test: DELETE method
+#!/usr/bin/env bash
+set -u
 
-echo "=== Test: DELETE Method ==="
+FAIL=0
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+UPLOAD_DIR="$REPO_ROOT/www/uploads"
+mkdir -p "$UPLOAD_DIR"
+TEST_FILE="$UPLOAD_DIR/test_delete_$$.txt"
+BASENAME=$(basename "$TEST_FILE")
 
-# First create a file - use mkdir -p to ensure directory exists
-echo "Creating test file..."
-mkdir -p www/uploads  # ADD THIS LINE
-echo "test content" > www/uploads/test_delete.txt
+cleanup() {
+    rm -f "$TEST_FILE"
+}
+trap cleanup EXIT
 
-if [ -f "www/uploads/test_delete.txt" ]; then
-    echo "✓ Test file created"
+pass() {
+    echo "[PASS] $1"
+}
+
+fail() {
+    echo "[FAIL] $1"
+    FAIL=$((FAIL + 1))
+}
+
+echo "=== DELETE Method ==="
+
+echo "test content" > "$TEST_FILE"
+if [ -f "$TEST_FILE" ]; then
+    pass "created test file for deletion"
 else
-    echo "✗ Failed to create test file"
-    echo "Current directory: $(pwd)"  # ADD THIS for debugging
-    echo "Trying to create in: $(pwd)/www/uploads/"  # ADD THIS
-    exit 1
+    fail "failed to create test file"
 fi
 
-# Delete the file
-echo "Sending DELETE request..."
-RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
-  -X DELETE \
-  http://localhost:8080/uploads/test_delete.txt)
-
-HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
-
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+    "http://localhost:8080/uploads/$BASENAME")
 if [ "$HTTP_CODE" = "200" ]; then
-    echo "✓ PASS: DELETE returned 200"
-    
-    # Verify file is gone
-    if [ ! -f "www/uploads/test_delete.txt" ]; then
-        echo "✓ PASS: File deleted successfully"
-    else
-        echo "✗ FAIL: File still exists"
-    fi
+    pass "DELETE returned 200"
 else
-    echo "✗ FAIL: Expected 200, got $HTTP_CODE"
-    echo "$RESPONSE"
+    fail "DELETE expected 200, got $HTTP_CODE"
 fi
 
-echo ""
+if [ ! -f "$TEST_FILE" ]; then
+    pass "target file was removed"
+else
+    fail "target file still exists after DELETE"
+fi
+
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+    "http://localhost:8080/uploads/$BASENAME")
+if [ "$HTTP_CODE" = "404" ]; then
+    pass "deleting missing file returns 404"
+else
+    fail "second DELETE expected 404, got $HTTP_CODE"
+fi
+
+if [ "$FAIL" -eq 0 ]; then
+    exit 0
+fi
+exit 1

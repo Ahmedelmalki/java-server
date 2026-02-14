@@ -237,11 +237,19 @@ cd test
 
 # Run individual tests
 ./test_static_files.sh
+./test_redirect.sh
+./test_virtual_hosts.sh
+./test_methods_and_error_pages.sh
+./test_delete.sh
+./test_multipart_upload.sh
+./test_binary_chunked.sh
 ./test_chunked_fragmented.sh
 ./test_body_size_limit.sh
-./test_keepalive.sh
-./test_delete.sh
+./test_session_cookies.sh
 ./test_cgi.sh
+./test_cgi_post_body.sh
+./test_keepalive.sh
+./test_bad_request_recovery.sh
 ```
 
 ### Stress Testing

@@ -1,44 +1,70 @@
-#!/bin/bash
-# Test: Binary file upload via chunked encoding (tests binary safety)
+#!/usr/bin/env bash
+set -u
 
-echo "=== Test: Binary Upload (Chunked) ==="
+FAIL=0
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+UPLOAD_DIR="$REPO_ROOT/www/uploads"
+TMP_DIR=$(mktemp -d)
+ORIGINAL_FILE="$TMP_DIR/test_binary.dat"
+DOWNLOADED_FILE="$TMP_DIR/downloaded_binary.dat"
 
-# Create a small binary file with random data
-echo "Generating 1KB random binary file..."
-dd if=/dev/urandom of=test_binary.dat bs=1K count=1 status=none
-
-ORIGINAL_SIZE=$(stat -f%z test_binary.dat 2>/dev/null || stat -c%s test_binary.dat)
-echo "Original size: $ORIGINAL_SIZE bytes"
-
-echo "Uploading via chunked encoding to /uploads..."
-RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
-  -X POST \
-  -H "Transfer-Encoding: chunked" \
-  --data-binary @test_binary.dat \
-  http://localhost:8080/uploads)
-
-HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
-FILENAME=$(echo "$RESPONSE" | grep -o 'upload_[0-9]*\.bin' | head -1)
-
-if [ "$HTTP_CODE" = "201" ] && [ -n "$FILENAME" ]; then
-    echo "✓ PASS: Upload succeeded"
-    echo "  Created: $FILENAME"
-    
-    # Verify file size
-    if [ -f "www/uploads/$FILENAME" ]; then
-        UPLOADED_SIZE=$(stat -f%z "www/uploads/$FILENAME" 2>/dev/null || stat -c%s "www/uploads/$FILENAME")
-        if [ "$ORIGINAL_SIZE" = "$UPLOADED_SIZE" ]; then
-            echo "✓ PASS: File size matches ($UPLOADED_SIZE bytes)"
-        else
-            echo "✗ FAIL: Size mismatch (original: $ORIGINAL_SIZE, uploaded: $UPLOADED_SIZE)"
-        fi
+cleanup() {
+    if [ -n "${UPLOADED_FILE:-}" ] && [ -f "$UPLOAD_DIR/$UPLOADED_FILE" ]; then
+        rm -f "$UPLOAD_DIR/$UPLOADED_FILE"
     fi
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+pass() {
+    echo "[PASS] $1"
+}
+
+fail() {
+    echo "[FAIL] $1"
+    FAIL=$((FAIL + 1))
+}
+
+echo "=== Binary Upload (Chunked) ==="
+
+dd if=/dev/urandom of="$ORIGINAL_FILE" bs=1K count=1 status=none
+
+HTTP_CODE=$(curl -s -o "$TMP_DIR/upload.body" -w "%{http_code}" \
+    -X POST -H "Transfer-Encoding: chunked" \
+    --data-binary @"$ORIGINAL_FILE" \
+    http://localhost:8080/uploads)
+
+if [ "$HTTP_CODE" = "201" ]; then
+    pass "chunked binary upload returned 201"
 else
-    echo "✗ FAIL: Upload failed (HTTP $HTTP_CODE)"
-    echo "$RESPONSE"
+    fail "chunked binary upload expected 201, got $HTTP_CODE"
 fi
 
-# Cleanup
-rm test_binary.dat
+UPLOADED_FILE=$(grep -o 'upload_[0-9]\+\.bin' "$TMP_DIR/upload.body" | head -n 1)
+if [ -n "$UPLOADED_FILE" ]; then
+    pass "uploaded binary filename detected"
+else
+    fail "could not parse uploaded binary filename"
+fi
 
-echo ""
+if [ -n "${UPLOADED_FILE:-}" ]; then
+    HTTP_CODE=$(curl -s -o "$DOWNLOADED_FILE" -w "%{http_code}" \
+        "http://localhost:8080/uploads/$UPLOADED_FILE")
+
+    if [ "$HTTP_CODE" = "200" ]; then
+        pass "uploaded binary can be downloaded"
+    else
+        fail "downloading uploaded binary expected 200, got $HTTP_CODE"
+    fi
+
+    if cmp -s "$ORIGINAL_FILE" "$DOWNLOADED_FILE"; then
+        pass "downloaded binary exactly matches original"
+    else
+        fail "downloaded binary does not match original"
+    fi
+fi
+
+if [ "$FAIL" -eq 0 ]; then
+    exit 0
+fi
+exit 1

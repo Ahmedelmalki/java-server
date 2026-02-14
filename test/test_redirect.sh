@@ -1,21 +1,41 @@
-#!/bin/bash
-# Test: HTTP redirect
+#!/usr/bin/env bash
+set -u
 
-echo "=== Test: Redirect ==="
+FAIL=0
+TMP_DIR=$(mktemp -d)
+cleanup() {
+    rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
 
-echo "Testing redirect from /redirect to /..."
-RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}\nREDIRECT:%{redirect_url}" \
-  -o /dev/null \
-  http://localhost:8080/redirect)
+pass() {
+    echo "[PASS] $1"
+}
 
-HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
-REDIRECT_URL=$(echo "$RESPONSE" | grep "REDIRECT:" | cut -d: -f2-)
+fail() {
+    echo "[FAIL] $1"
+    FAIL=$((FAIL + 1))
+}
+
+echo "=== Redirect ==="
+
+HTTP_CODE=$(curl -s -o /dev/null -D "$TMP_DIR/redirect.hdr" -w "%{http_code}" \
+    http://localhost:8080/redirect)
+LOCATION=$(grep -i '^Location:' "$TMP_DIR/redirect.hdr" | tail -n 1 | cut -d' ' -f2- | tr -d '\r')
 
 if [ "$HTTP_CODE" = "301" ]; then
-    echo "✓ PASS: Got 301 redirect"
-    echo "  Redirect URL: $REDIRECT_URL"
+    pass "GET /redirect returned 301"
 else
-    echo "✗ FAIL: Expected 301, got $HTTP_CODE"
+    fail "GET /redirect expected 301, got $HTTP_CODE"
 fi
 
-echo ""
+if [ "$LOCATION" = "http://localhost:8080/" ]; then
+    pass "redirect location is correct"
+else
+    fail "expected Location http://localhost:8080/, got '$LOCATION'"
+fi
+
+if [ "$FAIL" -eq 0 ]; then
+    exit 0
+fi
+exit 1
