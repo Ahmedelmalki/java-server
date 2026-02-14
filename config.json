@@ -3,7 +3,8 @@
     {
       "host": "localhost",
       "ports": [
-        8080
+        8080,
+        9090
       ],
       "serverName": "primary-server",
       "isDefault": true,
@@ -47,7 +48,8 @@
           "root": "www/api/cgi-bin",
           "cgi": {
             ".py": "/usr/bin/python3",
-            ".php": "/usr/bin/php"
+            ".php": "/usr/bin/php",
+            ".js": "/usr/bin/node"
           }
         },
         {

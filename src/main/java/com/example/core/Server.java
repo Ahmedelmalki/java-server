@@ -39,6 +39,7 @@ public class Server {
     }
 
     public void start() throws IOException {
+        //one selector
         Selector selector = Selector.open();
 
         for (int port : configsByPort.keySet()) {
@@ -60,7 +61,7 @@ public class Server {
 
             while (it.hasNext()) {
                 SelectionKey key = it.next();
-                it.remove();
+                it.remove(); // process and remove  the key
 
                 if (key.isAcceptable()) {
                     accept(selector, key);
@@ -78,7 +79,7 @@ public class Server {
         Integer port = (Integer) key.attachment();
 
         SocketChannel client = server.accept();
-        if (client == null) {
+        if (client == null) { // checked properly
             return;
         }
 
@@ -86,20 +87,20 @@ public class Server {
 
         ConnectionContext ctx = new ConnectionContext();
         ctx.localPort = port;
-        ctx.serverConfig = getDefaultServerForPort(port);
+        ctx.serverConfig = getDefaultServerForPort(port);  
 
-        client.register(selector, SelectionKey.OP_READ, ctx);
+        client.register(selector, SelectionKey.OP_READ, ctx); //attach context to  socket
         System.out.println("Accepted " + client.getRemoteAddress());
     }
 
     public void read(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
-        ConnectionContext ctx = (ConnectionContext) key.attachment();
+        ConnectionContext ctx = (ConnectionContext) key.attachment(); // get context
 
         int bytesRead = client.read(ctx.readBuffer);
 
-        if (bytesRead == -1) {
-            client.close();
+        if (bytesRead == -1) { // checked properly
+            client.close(); // remove client conn
             return;
         }
 
@@ -196,7 +197,7 @@ public class Server {
             boolean isErr = resStart.contains(" 4") || resStart.contains(" 5");
 
             if (isErr || "close".equalsIgnoreCase(ctx.request.headers.get("Connection"))) {
-                client.close();
+                client.close(); // remove client conn
                 key.cancel();
             } else {
                 ctx.reset();
@@ -237,6 +238,7 @@ public class Server {
         }
     }
 
+    //multi port
     private Map<Integer, List<ServerConfig>> buildConfigsByPort(List<ServerConfig> configs) {
         Map<Integer, List<ServerConfig>> byPort = new LinkedHashMap<>();
 
